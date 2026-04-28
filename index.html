@@ -1871,21 +1871,32 @@ function closePersonView() {
 // ═══════════════════════════════════════════════════════════════
 const AI_MODELS = {
   openai: [
-    { id: 'gpt-4.1',      name: 'GPT-4.1',       inputPer1M: 2.00,  outputPer1M: 8.00,   context: '1M',   note: 'Best long-context model' },
-    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini',  inputPer1M: 0.40,  outputPer1M: 1.60,   context: '1M',   note: 'Best value for long-context' },
-    { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano',  inputPer1M: 0.10,  outputPer1M: 0.40,   context: '1M',   note: 'Cheapest OpenAI model' },
-    { id: 'gpt-4o',       name: 'GPT-4o',         inputPer1M: 2.50,  outputPer1M: 10.00,  context: '128K', note: 'Proven multimodal model' },
-    { id: 'gpt-4o-mini',  name: 'GPT-4o Mini',   inputPer1M: 0.15,  outputPer1M: 0.60,   context: '128K', note: 'Extremely cheap for simple tasks' },
-    { id: 'o4-mini',      name: 'o4-mini',        inputPer1M: 1.10,  outputPer1M: 4.40,   context: '200K', note: 'Best cost-effective reasoning' },
-    { id: 'o3',           name: 'o3',             inputPer1M: 2.00,  outputPer1M: 8.00,   context: '200K', note: 'Top-tier reasoning' },
-    { id: 'o1',           name: 'o1',             inputPer1M: 15.00, outputPer1M: 60.00,  context: '200K', note: 'Legacy premium reasoning' },
+    // GPT-4.1 family
+    { id: 'gpt-4.1',           name: 'GPT-4.1',          inputPer1M: 2.00,   outputPer1M: 8.00,   context: '1M',   note: 'Latest flagship — best long-context' },
+    { id: 'gpt-4.1-mini',      name: 'GPT-4.1 Mini',     inputPer1M: 0.40,   outputPer1M: 1.60,   context: '1M',   note: 'Best value for long-context tasks' },
+    { id: 'gpt-4.1-nano',      name: 'GPT-4.1 Nano',     inputPer1M: 0.10,   outputPer1M: 0.40,   context: '1M',   note: 'Cheapest — high-volume simple tasks' },
+    // GPT-4o family
+    { id: 'gpt-4o',            name: 'GPT-4o',            inputPer1M: 2.50,   outputPer1M: 10.00,  context: '128K', note: 'Proven multimodal model' },
+    { id: 'gpt-4o-mini',       name: 'GPT-4o Mini',       inputPer1M: 0.15,   outputPer1M: 0.60,   context: '128K', note: 'Ultra-cheap for simple tasks' },
+    // GPT-4.5
+    { id: 'gpt-4.5-preview',   name: 'GPT-4.5 Preview',  inputPer1M: 75.00,  outputPer1M: 150.00, context: '128K', note: 'Largest GPT — emotional intelligence, deprecated soon' },
+    // o-series reasoning
+    { id: 'o4-mini',           name: 'o4-mini',           inputPer1M: 1.10,   outputPer1M: 4.40,   context: '200K', note: 'Best cost-effective reasoning (latest)' },
+    { id: 'o3',                name: 'o3',                inputPer1M: 2.00,   outputPer1M: 8.00,   context: '200K', note: 'Top-tier reasoning' },
+    { id: 'o3-pro',            name: 'o3-pro',            inputPer1M: 20.00,  outputPer1M: 80.00,  context: '200K', note: 'o3 with more compute — hardest problems' },
+    { id: 'o3-mini',           name: 'o3-mini',           inputPer1M: 1.10,   outputPer1M: 4.40,   context: '200K', note: 'Fast reasoning — STEM & code' },
+    { id: 'o1',                name: 'o1',                inputPer1M: 15.00,  outputPer1M: 60.00,  context: '200K', note: 'Premium reasoning (prev-gen)' },
+    { id: 'o1-mini',           name: 'o1-mini',           inputPer1M: 1.10,   outputPer1M: 4.40,   context: '128K', note: 'Cheap reasoning (prev-gen)' },
+    { id: 'o1-pro',            name: 'o1-pro',            inputPer1M: 150.00, outputPer1M: 600.00, context: '200K', note: 'Max compute reasoning — most reliable' },
+    // Codex
+    { id: 'codex-mini-latest', name: 'Codex Mini',        inputPer1M: 1.50,   outputPer1M: 6.00,   context: '200K', note: 'Optimized for agentic coding (Codex CLI)' },
   ],
   claude: [
-    { id: 'claude-opus-4-7',             name: 'Claude Opus 4.7',    inputPer1M: 5.00,  outputPer1M: 25.00, context: '1M',   note: 'Most capable Claude' },
-    { id: 'claude-sonnet-4-6',           name: 'Claude Sonnet 4.6',  inputPer1M: 3.00,  outputPer1M: 15.00, context: '1M',   note: 'Best speed/intelligence balance' },
-    { id: 'claude-haiku-4-5-20251001',   name: 'Claude Haiku 4.5',   inputPer1M: 1.00,  outputPer1M: 5.00,  context: '200K', note: 'Fastest Claude' },
-    { id: 'claude-haiku-3-5-20241022',   name: 'Claude Haiku 3.5',   inputPer1M: 0.80,  outputPer1M: 4.00,  context: '200K', note: 'Cheapest current-gen Haiku' },
-    { id: 'claude-haiku-3-20240307',     name: 'Claude Haiku 3',     inputPer1M: 0.25,  outputPer1M: 1.25,  context: '200K', note: 'Ultra-cheap legacy model' },
+    { id: 'claude-opus-4-7',           name: 'Claude Opus 4.7',   inputPer1M: 5.00,  outputPer1M: 25.00, context: '1M',   note: 'Most capable Claude' },
+    { id: 'claude-sonnet-4-6',         name: 'Claude Sonnet 4.6', inputPer1M: 3.00,  outputPer1M: 15.00, context: '1M',   note: 'Best speed/intelligence balance' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5',  inputPer1M: 1.00,  outputPer1M: 5.00,  context: '200K', note: 'Fastest Claude' },
+    { id: 'claude-haiku-3-5-20241022', name: 'Claude Haiku 3.5',  inputPer1M: 0.80,  outputPer1M: 4.00,  context: '200K', note: 'Cheapest current-gen Haiku' },
+    { id: 'claude-haiku-3-20240307',   name: 'Claude Haiku 3',    inputPer1M: 0.25,  outputPer1M: 1.25,  context: '200K', note: 'Ultra-cheap legacy model' },
   ]
 };
 
