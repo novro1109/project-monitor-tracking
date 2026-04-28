@@ -492,6 +492,23 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .iter-push-pill.nopush{background:#d1fae5;color:#065f46;}
 .iter-push-pill.unknown{background:#f1f5f9;color:#64748b;}
 
+/* Member Tracking dropdown */
+.member-tracking-wrap{position:relative;}
+.member-tracking-caret{font-size:9px;color:rgba(255,255,255,.35);margin-left:auto;transition:transform .2s;flex-shrink:0;}
+.member-tracking-wrap.open .member-tracking-caret{transform:rotate(180deg);}
+.member-tracking-wrap.open .board-btn[data-board="team"]{background:rgba(124,58,237,.18);border-color:rgba(124,58,237,.4);}
+.member-tracking-drop{display:none;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:9px;margin-top:3px;overflow:hidden;}
+.member-tracking-wrap.open .member-tracking-drop{display:block;}
+.member-tracking-search-wrap{padding:7px 8px 4px;}
+.member-tracking-search{width:100%;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:5px 9px;font-size:11px;font-family:inherit;color:rgba(255,255,255,.8);outline:none;box-sizing:border-box;}
+.member-tracking-search::placeholder{color:rgba(255,255,255,.25);}
+.member-item{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;transition:background .1s;border-radius:6px;margin:1px 4px;}
+.member-item:hover{background:rgba(255,255,255,.07);}
+.member-item.active-member{background:rgba(124,58,237,.2);}
+.member-avatar{width:22px;height:22px;border-radius:50%;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+.member-name{font-size:11.5px;color:rgba(255,255,255,.75);font-weight:500;}
+.member-tracking-list-footer{padding:4px 8px 7px;font-size:9px;color:rgba(255,255,255,.2);text-align:center;}
+
 /* Sidebar gear btn */
 .sidebar-gear-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:transparent;cursor:pointer;color:rgba(255,255,255,.3);font-size:12px;font-family:inherit;border-radius:8px;transition:all .15s;margin-top:4px;}
 .sidebar-gear-btn:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);}
@@ -551,19 +568,25 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
         </div>
         <div class="board-active-dot"></div>
       </button>
-    </div>
-
-    <!-- Team Search -->
-    <div style="padding:10px 10px 0">
-      <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.2);text-transform:uppercase;letter-spacing:1px;padding:0 4px 6px">Team View</div>
-      <div style="position:relative">
-        <input id="team-search-input" placeholder="Search team member…" autocomplete="off"
-          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;font-size:11.5px;font-family:inherit;color:rgba(255,255,255,.85);outline:none;box-sizing:border-box;"
-          oninput="teamSearchFilter(this.value)"
-          onkeydown="if(event.key==='Enter')teamSearchGo()"
-          onfocus="document.getElementById('team-search-drop').style.display='block'"
-        >
-        <div id="team-search-drop" style="display:none;position:absolute;left:0;right:0;top:calc(100%+4px);background:#1e1b4b;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+      <!-- Member Tracking board-btn with expandable people list -->
+      <div class="member-tracking-wrap" id="member-tracking-wrap">
+        <button class="board-btn" data-board="team" id="member-tracking-btn" onclick="toggleMemberTracking(event)">
+          <div class="board-icon" style="background:linear-gradient(135deg,#7c3aed,#6d28d9)">👥</div>
+          <div class="board-info">
+            <div class="board-name">Member Tracking</div>
+            <div class="board-desc" id="member-tracking-sub">Loading…</div>
+          </div>
+          <span class="member-tracking-caret" id="member-tracking-caret">▾</span>
+        </button>
+        <div class="member-tracking-drop" id="member-tracking-drop">
+          <div class="member-tracking-search-wrap">
+            <input id="team-search-input" class="member-tracking-search" placeholder="Filter members…" autocomplete="off"
+              oninput="renderMemberList(this.value)"
+              onclick="event.stopPropagation()"
+            >
+          </div>
+          <div id="member-tracking-list"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1107,6 +1130,11 @@ function switchBoard(board) {
   renderNav(board);
   // restore first tab (team board has no tabs)
   if (board !== 'team') {
+    // Reset member tracking subtitle if navigating away
+    if (ACTIVE_MEMBER) {
+      document.getElementById('member-tracking-sub').textContent = `${ALL_KNOWN_PEOPLE.length} members`;
+      ACTIVE_MEMBER = null;
+    }
     document.querySelectorAll(`#board-${board} .tab-content`).forEach(c=>c.classList.remove('active'));
     const first=document.getElementById(`${board}-tab-overview`);
     if(first)first.classList.add('active');
@@ -2061,43 +2089,56 @@ function buildPeopleIndex() {
     splitPeople(assignee).forEach(p => { if (p) people.add(p); });
   }
   ALL_KNOWN_PEOPLE = [...people].sort();
+  document.getElementById('member-tracking-sub').textContent = `${ALL_KNOWN_PEOPLE.length} members`;
+  renderMemberList('');
 }
 
-function teamSearchFilter(val) {
-  const drop = document.getElementById('team-search-drop');
-  if (!val.trim()) { drop.style.display = 'none'; return; }
-  const q = val.toLowerCase();
-  const matches = ALL_KNOWN_PEOPLE.filter(p => p.toLowerCase().includes(q)).slice(0, 8);
-  if (!matches.length) { drop.style.display = 'none'; return; }
-  drop.innerHTML = matches.map(p => `
-    <div class="team-drop-item" onclick="teamSearchSelect('${escapeHtml(p)}')">
-      <div class="team-drop-avatar ${avatarColor(p)}">${initials(p)}</div>
-      <span>${escapeHtml(p)}</span>
-    </div>`).join('');
-  drop.style.display = 'block';
-}
+let ACTIVE_MEMBER = null;
 
-function teamSearchGo() {
-  const val = document.getElementById('team-search-input').value.trim();
-  if (val) teamSearchSelect(val);
-}
-
-function teamSearchSelect(name) {
-  document.getElementById('team-search-input').value = name;
-  document.getElementById('team-search-drop').style.display = 'none';
-  openTeamView(name);
+function toggleMemberTracking(e) {
+  e.stopPropagation();
+  const wrap = document.getElementById('member-tracking-wrap');
+  const isOpen = wrap.classList.contains('open');
+  wrap.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    // Also switch topbar context without full board switch
+    document.querySelectorAll('.board-btn').forEach(b => b.classList.toggle('active', b.dataset.board === 'team'));
+    setTimeout(() => document.getElementById('team-search-input')?.focus(), 80);
+  }
 }
 
 document.addEventListener('click', e => {
-  if (!e.target.closest('#team-search-input') && !e.target.closest('#team-search-drop')) {
-    const d = document.getElementById('team-search-drop');
-    if (d) d.style.display = 'none';
+  if (!e.target.closest('#member-tracking-wrap')) {
+    document.getElementById('member-tracking-wrap')?.classList.remove('open');
   }
 });
 
-function openTeamView(name) {
-  // Switch to team board view
+function renderMemberList(filter) {
+  const list = document.getElementById('member-tracking-list');
+  if (!list) return;
+  const q = (filter || '').toLowerCase();
+  const filtered = q ? ALL_KNOWN_PEOPLE.filter(p => p.toLowerCase().includes(q)) : ALL_KNOWN_PEOPLE;
+  if (!filtered.length) { list.innerHTML = '<div class="member-tracking-list-footer">No members found</div>'; return; }
+  list.innerHTML = filtered.map(p => `
+    <div class="member-item${p === ACTIVE_MEMBER ? ' active-member' : ''}" onclick="teamSearchSelect('${escapeHtml(p)}')">
+      <div class="member-avatar ${avatarColor(p)}">${initials(p)}</div>
+      <span class="member-name">${escapeHtml(p)}</span>
+    </div>`).join('') +
+    `<div class="member-tracking-list-footer">${filtered.length} member${filtered.length !== 1 ? 's' : ''}</div>`;
+}
+
+function teamSearchSelect(name) {
+  ACTIVE_MEMBER = name;
+  document.getElementById('member-tracking-wrap').classList.remove('open');
+  // Update the btn subtitle to show selected member
+  document.getElementById('member-tracking-sub').textContent = name;
   switchBoard('team');
+  // Mark btn active
+  document.querySelectorAll('.board-btn').forEach(b => b.classList.toggle('active', b.dataset.board === 'team'));
+  openTeamView(name);
+}
+
+function openTeamView(name) {
 
   const aimItems   = ALL_BOARD_DATA.aim?.items    || [];
   const harleyItems= ALL_BOARD_DATA.harley?.items  || [];
