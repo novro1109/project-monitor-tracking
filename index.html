@@ -253,9 +253,29 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .chat-title{color:white;font-size:13px;font-weight:700;letter-spacing:-.1px;}
 .chat-subtitle{color:rgba(255,255,255,.4);font-size:10px;margin-top:2px;}
 .chat-header-right{display:flex;align-items:center;gap:6px;position:relative;z-index:1;}
-.chat-model-toggle{display:flex;background:rgba(0,0,0,.2);border-radius:20px;padding:2px;border:1px solid rgba(255,255,255,.08);}
-.chat-model-btn{padding:4px 11px;border-radius:18px;border:none;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit;color:rgba(255,255,255,.45);background:transparent;transition:all .18s;letter-spacing:.3px;}
-.chat-model-btn.active{background:white;color:#312e81;box-shadow:0 1px 4px rgba(0,0,0,.15);}
+.chat-model-selector{position:relative;}
+.chat-model-pill{display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:4px 10px 4px 8px;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit;color:rgba(255,255,255,.9);transition:background .15s;white-space:nowrap;}
+.chat-model-pill:hover{background:rgba(0,0,0,.35);}
+.chat-model-pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.chat-model-pill-dot.openai{background:#10a37f;}
+.chat-model-pill-dot.claude{background:#d97706;}
+.chat-model-pill-caret{opacity:.5;font-size:9px;margin-left:2px;}
+.chat-model-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:#1e1b4b;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;min-width:270px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:1000;display:none;}
+.chat-model-dropdown.open{display:block;}
+.chat-model-group-label{font-size:9px;font-weight:700;letter-spacing:.8px;color:rgba(255,255,255,.35);text-transform:uppercase;padding:4px 8px 2px;margin-top:2px;}
+.chat-model-option{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:background .12s;}
+.chat-model-option:hover{background:rgba(255,255,255,.07);}
+.chat-model-option.selected{background:rgba(255,255,255,.1);}
+.chat-model-option-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.chat-model-option-dot.openai{background:#10a37f;}
+.chat-model-option-dot.claude{background:#d97706;}
+.chat-model-option-info{flex:1;min-width:0;}
+.chat-model-option-name{font-size:11px;font-weight:700;color:rgba(255,255,255,.9);}
+.chat-model-option-note{font-size:9px;color:rgba(255,255,255,.4);margin-top:1px;}
+.chat-model-option-price{text-align:right;flex-shrink:0;}
+.chat-model-option-price-in{font-size:9px;color:#34d399;font-weight:600;}
+.chat-model-option-price-out{font-size:9px;color:rgba(255,255,255,.35);}
+.chat-model-divider{border:none;border-top:1px solid rgba(255,255,255,.06);margin:4px 0;}
 .chat-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(255,255,255,.5);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
 .chat-close:hover{background:rgba(255,255,255,.18);color:white;}
 
@@ -728,9 +748,13 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
       </div>
     </div>
     <div class="chat-header-right">
-      <div class="chat-model-toggle">
-        <button class="chat-model-btn" id="btn-claude" onclick="setModel('claude')">Claude</button>
-        <button class="chat-model-btn active" id="btn-openai" onclick="setModel('openai')">GPT-4</button>
+      <div class="chat-model-selector" id="model-selector">
+        <button class="chat-model-pill" id="model-pill" onclick="toggleModelDropdown(event)">
+          <span class="chat-model-pill-dot openai" id="model-pill-dot"></span>
+          <span id="model-pill-label">GPT-4o</span>
+          <span class="chat-model-pill-caret">▾</span>
+        </button>
+        <div class="chat-model-dropdown" id="model-dropdown"></div>
       </div>
       <button class="chat-close" onclick="toggleChat()">✕</button>
     </div>
@@ -1664,7 +1688,6 @@ async function testAI(model) {
 function saveDefaultModel(val) {
   if (!ADMIN_CONFIG.ai) ADMIN_CONFIG.ai = {};
   ADMIN_CONFIG.ai.defaultModel = val;
-  CHAT_MODEL = val;
   setModel(val);
 }
 
@@ -1814,9 +1837,87 @@ function closePersonView() {
 // ═══════════════════════════════════════════════════════════════
 // AI CHAT
 // ═══════════════════════════════════════════════════════════════
-let CHAT_MODEL = 'openai';
+const AI_MODELS = {
+  openai: [
+    { id: 'gpt-4.1',      name: 'GPT-4.1',       inputPer1M: 2.00,  outputPer1M: 8.00,   context: '1M',   note: 'Best long-context model' },
+    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini',  inputPer1M: 0.40,  outputPer1M: 1.60,   context: '1M',   note: 'Best value for long-context' },
+    { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano',  inputPer1M: 0.10,  outputPer1M: 0.40,   context: '1M',   note: 'Cheapest OpenAI model' },
+    { id: 'gpt-4o',       name: 'GPT-4o',         inputPer1M: 2.50,  outputPer1M: 10.00,  context: '128K', note: 'Proven multimodal model' },
+    { id: 'gpt-4o-mini',  name: 'GPT-4o Mini',   inputPer1M: 0.15,  outputPer1M: 0.60,   context: '128K', note: 'Extremely cheap for simple tasks' },
+    { id: 'o4-mini',      name: 'o4-mini',        inputPer1M: 1.10,  outputPer1M: 4.40,   context: '200K', note: 'Best cost-effective reasoning' },
+    { id: 'o3',           name: 'o3',             inputPer1M: 2.00,  outputPer1M: 8.00,   context: '200K', note: 'Top-tier reasoning' },
+    { id: 'o1',           name: 'o1',             inputPer1M: 15.00, outputPer1M: 60.00,  context: '200K', note: 'Legacy premium reasoning' },
+  ],
+  claude: [
+    { id: 'claude-opus-4-7',             name: 'Claude Opus 4.7',    inputPer1M: 5.00,  outputPer1M: 25.00, context: '1M',   note: 'Most capable Claude' },
+    { id: 'claude-sonnet-4-6',           name: 'Claude Sonnet 4.6',  inputPer1M: 3.00,  outputPer1M: 15.00, context: '1M',   note: 'Best speed/intelligence balance' },
+    { id: 'claude-haiku-4-5-20251001',   name: 'Claude Haiku 4.5',   inputPer1M: 1.00,  outputPer1M: 5.00,  context: '200K', note: 'Fastest Claude' },
+    { id: 'claude-haiku-3-5-20241022',   name: 'Claude Haiku 3.5',   inputPer1M: 0.80,  outputPer1M: 4.00,  context: '200K', note: 'Cheapest current-gen Haiku' },
+    { id: 'claude-haiku-3-20240307',     name: 'Claude Haiku 3',     inputPer1M: 0.25,  outputPer1M: 1.25,  context: '200K', note: 'Ultra-cheap legacy model' },
+  ]
+};
+
+// current selections: { provider: 'openai'|'claude', modelId: string }
+let CHAT_PROVIDER = 'openai';
+let CHAT_MODEL_ID = 'gpt-4o';
 let CHAT_OPEN = false;
 let BOARD_CONTEXT = null; // populated after boot
+
+function buildModelDropdown() {
+  const dd = document.getElementById('model-dropdown');
+  if (!dd) return;
+  dd.innerHTML = '';
+  const groups = [
+    { key: 'openai', label: 'OpenAI' },
+    { key: 'claude', label: 'Anthropic Claude' },
+  ];
+  groups.forEach((g, gi) => {
+    if (gi > 0) { const hr = document.createElement('hr'); hr.className = 'chat-model-divider'; dd.appendChild(hr); }
+    const lbl = document.createElement('div'); lbl.className = 'chat-model-group-label'; lbl.textContent = g.label; dd.appendChild(lbl);
+    AI_MODELS[g.key].forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'chat-model-option' + (g.key === CHAT_PROVIDER && m.id === CHAT_MODEL_ID ? ' selected' : '');
+      row.innerHTML = `
+        <span class="chat-model-option-dot ${g.key}"></span>
+        <div class="chat-model-option-info">
+          <div class="chat-model-option-name">${m.name} <span style="font-weight:400;font-size:9px;color:rgba(255,255,255,.3)">${m.context}</span></div>
+          <div class="chat-model-option-note">${m.note}</div>
+        </div>
+        <div class="chat-model-option-price">
+          <div class="chat-model-option-price-in">$${m.inputPer1M.toFixed(2)}/1M in</div>
+          <div class="chat-model-option-price-out">$${m.outputPer1M.toFixed(2)}/1M out</div>
+        </div>`;
+      row.onclick = () => selectModel(g.key, m.id);
+      dd.appendChild(row);
+    });
+  });
+}
+
+function toggleModelDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('model-dropdown');
+  const isOpen = dd.classList.contains('open');
+  if (!isOpen) buildModelDropdown();
+  dd.classList.toggle('open');
+}
+
+document.addEventListener('click', () => {
+  const dd = document.getElementById('model-dropdown');
+  if (dd) dd.classList.remove('open');
+});
+
+function selectModel(provider, modelId) {
+  CHAT_PROVIDER = provider;
+  CHAT_MODEL_ID = modelId;
+  const allModels = [...AI_MODELS.openai, ...AI_MODELS.claude];
+  const m = allModels.find(x => x.id === modelId) || { name: modelId };
+  const dot = document.getElementById('model-pill-dot');
+  const lbl = document.getElementById('model-pill-label');
+  if (dot) { dot.className = 'chat-model-pill-dot ' + provider; }
+  if (lbl) lbl.textContent = m.name;
+  const dd = document.getElementById('model-dropdown');
+  if (dd) dd.classList.remove('open');
+}
 
 function toggleChat() {
   CHAT_OPEN = !CHAT_OPEN;
@@ -1827,10 +1928,12 @@ function toggleChat() {
   }
 }
 
-function setModel(model) {
-  CHAT_MODEL = model;
-  document.getElementById('btn-claude').classList.toggle('active', model === 'claude');
-  document.getElementById('btn-openai').classList.toggle('active', model === 'openai');
+function setModel(provider, modelId) {
+  // Support old single-arg calls from admin console (provider only)
+  if (!modelId) {
+    modelId = provider === 'claude' ? 'claude-sonnet-4-6' : 'gpt-4o';
+  }
+  selectModel(provider, modelId);
 }
 
 function sendSuggestion(el) {
@@ -2037,12 +2140,14 @@ async function sendChat() {
 
   try {
     let answer;
-    if (CHAT_MODEL === 'claude') {
+    const allModels = [...AI_MODELS.openai, ...AI_MODELS.claude];
+    const modelMeta = allModels.find(x => x.id === CHAT_MODEL_ID) || { name: CHAT_MODEL_ID };
+    if (CHAT_PROVIDER === 'claude') {
       const res = await fetch('/api/ai/claude', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: CHAT_MODEL_ID,
           max_tokens: 1024,
           system: BOARD_CONTEXT,
           messages: [{role: 'user', content: question}],
@@ -2056,7 +2161,7 @@ async function sendChat() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: CHAT_MODEL_ID,
           messages: [
             {role: 'system', content: BOARD_CONTEXT},
             {role: 'user', content: question},
@@ -2069,8 +2174,7 @@ async function sendChat() {
       answer = data.choices?.[0]?.message?.content || 'No response received.';
     }
     removeTyping();
-    const modelLabel = CHAT_MODEL === 'claude' ? 'Claude' : 'GPT-4o';
-    appendMessage('ai', formatAIResponse(answer), true, modelLabel);
+    appendMessage('ai', formatAIResponse(answer), true, modelMeta.name);
   } catch (err) {
     removeTyping();
     const msgs = document.getElementById('chat-messages');
@@ -2109,7 +2213,7 @@ document.getElementById('topbar-title').textContent=NAV_CONFIG['aim'].title;
 
 // Load config on boot
 loadAdminConfig().then(cfg => {
-  if (cfg.ai?.defaultModel) { CHAT_MODEL = cfg.ai.defaultModel; setModel(CHAT_MODEL); }
+  if (cfg.ai?.defaultModel) { setModel(cfg.ai.defaultModel, cfg.ai.defaultModel === 'claude' ? (cfg.ai.claudeModel || 'claude-sonnet-4-6') : (cfg.ai.openaiModel || 'gpt-4o')); }
 });
 
 (async()=>{
