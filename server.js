@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 3000;
 const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const CACHE_TTL_MS = 5 * 60 * 1000; // refresh every 5 minutes
 
 if (!MONDAY_API_TOKEN) {
   console.error('ERROR: MONDAY_API_TOKEN is not set in .env');
@@ -17,16 +18,87 @@ if (!MONDAY_API_TOKEN) {
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname)));
 
-// Proxy endpoint — keeps the monday token server-side
+// ── Board cache ──────────────────────────────────────────────────
+const BOARDS = [
+  { key: 'aim',    id: '18397691833', cols: ['color_mm01gkr3','color_mm01njm4','multiple_person_mm01ep1t','dropdown_mm07v0wc','date_mm01xcns','date_mm01ead4','rating_mm0194kz','color_mm01kq73','multiple_person_mm019deh','dropdown_mm01zc7c'] },
+  { key: 'harley', id: '18409299249', cols: ['color_mm2jpa8m','color_mm2jcewg','date_mm2jhcpf','text_mm2jrg3h'] },
+  { key: 'pt',     id: '18410501676', cols: ['text_mm2tpd59','color_mm2t5ymq','text_mm2th0rf','color_mm2tpgb5'] },
+  { key: 'iter',   id: '18391776041', cols: ['color_mkzy4ahq','color_mm01yqgw','date_mm018jsq'] },
+];
+
+const cache = { data: null, fetchedAt: null, refreshing: false };
+
+async function mondayFetch(body) {
+  const res = await fetch('https://api.monday.com/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': MONDAY_API_TOKEN, 'API-Version': '2024-01' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`monday HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors.map(e => e.message).join('; '));
+  return json.data;
+}
+
+async function fetchBoardItems(boardId, cols) {
+  let items = [], cursor = null, pages = 0;
+  while (true) {
+    let data;
+    if (!cursor) {
+      data = await mondayFetch({ query: `query($b:ID!,$l:Int!,$c:[String!]){boards(ids:[$b]){items_page(limit:$l){cursor items{id name url updated_at column_values(ids:$c){id text}}}}}`, variables: { b: boardId, l: 500, c: cols } });
+      const page = data.boards[0].items_page;
+      items.push(...page.items); cursor = page.cursor || null;
+    } else {
+      data = await mondayFetch({ query: `query($l:Int!,$cur:String!,$c:[String!]){next_items_page(limit:$l,cursor:$cur){cursor items{id name url updated_at column_values(ids:$c){id text}}}}`, variables: { l: 500, cur: cursor, c: cols } });
+      const page = data.next_items_page;
+      items.push(...page.items); cursor = page.cursor || null;
+    }
+    pages++; if (!cursor || pages > 20) break;
+  }
+  return items;
+}
+
+async function refreshCache() {
+  if (cache.refreshing) return;
+  cache.refreshing = true;
+  const t = Date.now();
+  console.log('[cache] Fetching all boards…');
+  try {
+    const results = await Promise.all(BOARDS.map(b => fetchBoardItems(b.id, b.cols)));
+    const data = {};
+    BOARDS.forEach((b, i) => { data[b.key] = results[i]; });
+    cache.data = data;
+    cache.fetchedAt = Date.now();
+    console.log(`[cache] Ready — ${Object.values(data).reduce((s,a)=>s+a.length,0)} total items in ${Date.now()-t}ms`);
+  } catch (err) {
+    console.error('[cache] Refresh failed:', err.message);
+  } finally {
+    cache.refreshing = false;
+  }
+}
+
+// Start background refresh loop
+refreshCache();
+setInterval(refreshCache, CACHE_TTL_MS);
+
+// Serve cached board data to browser — instant response
+app.get('/api/boards-cache', (req, res) => {
+  if (!cache.data) return res.status(503).json({ error: 'Cache warming up, try again shortly', ready: false });
+  res.json({ data: cache.data, fetchedAt: cache.fetchedAt, ready: true });
+});
+
+// Force manual refresh
+app.post('/api/boards-refresh', (req, res) => {
+  refreshCache();
+  res.json({ ok: true, message: 'Refresh started' });
+});
+
+// Proxy endpoint — keeps the monday token server-side (still used for admin probing)
 app.post('/api/monday', async (req, res) => {
   try {
     const response = await fetch('https://api.monday.com/v2', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': MONDAY_API_TOKEN,
-        'API-Version': '2024-01',
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': MONDAY_API_TOKEN, 'API-Version': '2024-01' },
       body: JSON.stringify(req.body),
     });
     const data = await response.json();

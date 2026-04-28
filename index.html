@@ -612,6 +612,7 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
       <p id="topbar-sub">Fetching live data from monday.com…</p>
     </div>
     <div class="topbar-right">
+      <button id="refresh-btn" onclick="forceRefresh()" title="Refresh data from monday.com" style="display:none;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;background:#f8fafc;border:1px solid #e2e8f0;color:#374151;cursor:pointer;font-family:inherit;">↻ Refresh</button>
       <div id="status-badge" class="loading-badge"><div class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></div> Loading…</div>
     </div>
   </header>
@@ -1153,7 +1154,8 @@ function switchTab(tab) {
 function setBadge(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 function setStatusBadge(ready){
   const el=document.getElementById('status-badge');
-  if(ready){el.className='live-badge';el.innerHTML='<div class="live-dot"></div> Live';}
+  const rb=document.getElementById('refresh-btn');
+  if(ready){el.className='live-badge';el.innerHTML='<div class="live-dot"></div> Live';if(rb)rb.style.display='block';}
   else{el.className='loading-badge';el.innerHTML='<div class="spinner" style="width:14px;height:14px;border-width:2px;margin:0"></div> Loading…';}
 }
 
@@ -2602,16 +2604,7 @@ loadAdminConfig().then(cfg => {
   if (cfg.ai?.defaultModel) { setModel(cfg.ai.defaultModel, cfg.ai.defaultModel === 'claude' ? (cfg.ai.claudeModel || 'claude-sonnet-4-6') : (cfg.ai.openaiModel || 'gpt-4o')); }
 });
 
-(async()=>{
-  try{
-    // Load all four boards in parallel
-    const [aimItems,harleyItems,ptItems,iterItems]=await Promise.all([
-      fetchBoard(AIM_BOARD,Object.values(AIM_COL)),
-      fetchBoard(HARLEY_BOARD,Object.values(HARLEY_COL)),
-      fetchBoard(PT_BOARD,Object.values(PT_COL)),
-      fetchBoard(ITER_BOARD,Object.values(ITER_COL)),
-    ]);
-
+async function loadAndRender(aimItems, harleyItems, ptItems, iterItems) {
     // AIM
     const aimStats=aimBuildStats(aimItems);
     aimRenderKpi(aimStats);
@@ -2664,9 +2657,80 @@ loadAdminConfig().then(cfg => {
     BOARD_CONTEXT = buildBoardContext(aimStats, harleyStats, ptStats);
     document.getElementById('chat-status-sub').textContent = `${aimStats.total + harleyStats.total + ptStats.total + iterStats.total} items loaded across 4 boards`;
 
-    document.getElementById('topbar-sub').textContent=`AIM: ${aimStats.total} tasks · ${pct(aimStats.buckets.done,aimStats.total)}% done  |  Harley: ${harleyStats.total} tasks  |  Projects: ${ptStats.total} tasks  |  Iterations: ${iterStats.total} missions`;
-    document.getElementById('last-updated').textContent=`Refreshed ${new Date().toLocaleTimeString()}`;
+    const age = cache_fetchedAt ? ` · data from ${new Date(cache_fetchedAt).toLocaleTimeString()}` : '';
+    document.getElementById('topbar-sub').textContent=`AIM: ${aimStats.total} tasks · ${pct(aimStats.buckets.done,aimStats.total)}% done  |  Harley: ${harleyStats.total} tasks  |  Projects: ${ptStats.total} tasks  |  Iterations: ${iterStats.total} missions${age}`;
+    document.getElementById('last-updated').textContent=`Updated ${new Date().toLocaleTimeString()}`;
     setStatusBadge(true);
+}
+
+let cache_fetchedAt = null;
+
+async function forceRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) { btn.textContent = '↻ Refreshing…'; btn.disabled = true; }
+  setStatusBadge(false);
+  await fetch('/api/boards-refresh', { method: 'POST' });
+  // Poll until new data is ready
+  let attempts = 0;
+  const prevFetchedAt = cache_fetchedAt;
+  while (attempts < 40) {
+    await new Promise(r => setTimeout(r, 3000));
+    attempts++;
+    const r = await fetch('/api/boards-cache');
+    if (r.ok) {
+      const { data, fetchedAt, ready } = await r.json();
+      if (ready && data && fetchedAt !== prevFetchedAt) {
+        cache_fetchedAt = fetchedAt;
+        function normalizeItems(items) {
+          return items.map(it => ({...it, column_values: Object.fromEntries((it.column_values||[]).map(cv=>[cv.id,cv.text||null]))}));
+        }
+        await loadAndRender(normalizeItems(data.aim), normalizeItems(data.harley), normalizeItems(data.pt), normalizeItems(data.iter));
+        if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+        return;
+      }
+    }
+  }
+  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+  setStatusBadge(true);
+}
+
+(async()=>{
+  try{
+    // Try server cache first — instant response
+    const cacheRes = await fetch('/api/boards-cache');
+    if (cacheRes.ok) {
+      const { data, fetchedAt, ready } = await cacheRes.json();
+      if (ready && data) {
+        cache_fetchedAt = fetchedAt;
+        function normalizeItems(items) {
+          return items.map(it => ({...it, column_values: Object.fromEntries((it.column_values||[]).map(cv=>[cv.id,cv.text||null]))}));
+        }
+        await loadAndRender(normalizeItems(data.aim), normalizeItems(data.harley), normalizeItems(data.pt), normalizeItems(data.iter));
+        return;
+      }
+      // Cache warming — show message and poll until ready
+      document.getElementById('topbar-sub').textContent = 'Cache warming up — fetching live data for the first time…';
+    }
+    // Fallback: fetch directly from monday (first boot, cache not ready yet — poll)
+    let attempts = 0;
+    while (attempts < 30) {
+      await new Promise(r => setTimeout(r, 3000));
+      attempts++;
+      const r2 = await fetch('/api/boards-cache');
+      if (r2.ok) {
+        const { data, fetchedAt, ready } = await r2.json();
+        if (ready && data) {
+          cache_fetchedAt = fetchedAt;
+          function normalizeItems(items) {
+            return items.map(it => ({...it, column_values: Object.fromEntries((it.column_values||[]).map(cv=>[cv.id,cv.text||null]))}));
+          }
+          await loadAndRender(normalizeItems(data.aim), normalizeItems(data.harley), normalizeItems(data.pt), normalizeItems(data.iter));
+          return;
+        }
+        document.getElementById('topbar-sub').textContent = `Fetching from monday.com… (${attempts * 3}s elapsed)`;
+      }
+    }
+    throw new Error('Cache did not warm up in time. Restart the server.');
   } catch(e){
     document.getElementById('error-area').innerHTML=`<div class="error"><strong>Could not load data.</strong><br>${escapeHtml(e.message||String(e))}</div>`;
     setStatusBadge(true);
