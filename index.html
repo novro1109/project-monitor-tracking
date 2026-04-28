@@ -253,39 +253,10 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .chat-title{color:white;font-size:13px;font-weight:700;letter-spacing:-.1px;}
 .chat-subtitle{color:rgba(255,255,255,.4);font-size:10px;margin-top:2px;}
 .chat-header-right{display:flex;align-items:center;gap:6px;position:relative;z-index:1;}
-.chat-model-selector{position:relative;}
-.chat-model-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:5px 11px 5px 9px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:inherit;color:rgba(255,255,255,.92);transition:background .15s,border-color .15s;white-space:nowrap;letter-spacing:.1px;}
-.chat-model-pill:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);}
-.chat-model-pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor;}
-.chat-model-pill-dot.openai{background:#10a37f;color:#10a37f;}
-.chat-model-pill-dot.claude{background:#f59e0b;color:#f59e0b;}
-.chat-model-pill-caret{opacity:.45;font-size:8px;margin-left:1px;transition:transform .2s;}
-.chat-model-pill.open .chat-model-pill-caret{transform:rotate(180deg);}
-@keyframes dropdownIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
-.chat-model-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:rgba(15,12,48,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:8px;min-width:290px;box-shadow:0 16px 48px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06);z-index:1000;display:none;}
-.chat-model-dropdown.open{display:block;animation:dropdownIn .18s cubic-bezier(.16,1,.3,1) both;}
-.chat-model-group-header{display:flex;align-items:center;gap:6px;padding:6px 10px 4px;margin-top:2px;}
-.chat-model-group-icon{font-size:12px;opacity:.7;}
-.chat-model-group-label{font-size:9px;font-weight:800;letter-spacing:.9px;color:rgba(255,255,255,.3);text-transform:uppercase;}
-.chat-model-option{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:0;padding:0;border-radius:10px;cursor:pointer;transition:background .12s;overflow:hidden;margin-bottom:1px;}
-.chat-model-option:hover{background:rgba(255,255,255,.06);}
-.chat-model-option.selected{background:rgba(255,255,255,.09);}
-.chat-model-option-left{display:flex;align-items:center;justify-content:center;padding:10px 6px 10px 10px;}
-.chat-model-option-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px currentColor;}
-.chat-model-option-dot.openai{background:#10a37f;color:#10a37f;}
-.chat-model-option-dot.claude{background:#f59e0b;color:#f59e0b;}
-.chat-model-option-info{padding:9px 6px 9px 4px;min-width:0;}
-.chat-model-option-name{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.92);line-height:1.2;}
-.chat-model-option-note{font-size:9px;color:rgba(255,255,255,.35);margin-top:2px;line-height:1.3;}
-.chat-model-ctx-badge{padding:9px 6px 9px 0;flex-shrink:0;}
-.chat-model-ctx-tag{font-size:8.5px;font-weight:700;color:rgba(255,255,255,.3);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px;letter-spacing:.2px;}
-.chat-model-option-price{text-align:right;padding:9px 10px 9px 4px;flex-shrink:0;}
-.chat-model-option-price-in{font-size:9.5px;color:#34d399;font-weight:700;line-height:1.4;}
-.chat-model-option-price-out{font-size:8.5px;color:rgba(255,255,255,.28);line-height:1.4;}
-.chat-model-option-check{width:18px;display:none;color:#a78bfa;font-size:11px;padding-right:6px;}
-.chat-model-option.selected .chat-model-option-check{display:flex;align-items:center;justify-content:center;}
-.chat-model-option.selected .chat-model-option-price{display:none;}
-.chat-model-divider{border:none;border-top:1px solid rgba(255,255,255,.05);margin:6px 4px;}
+.chat-model-active{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:4px 11px 4px 9px;font-size:10.5px;font-weight:700;color:rgba(255,255,255,.8);white-space:nowrap;letter-spacing:.1px;}
+.chat-model-active-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor;}
+.chat-model-active-dot.openai{background:#10a37f;color:#10a37f;}
+.chat-model-active-dot.claude{background:#f59e0b;color:#f59e0b;}
 .chat-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(255,255,255,.5);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
 .chat-close:hover{background:rgba(255,255,255,.18);color:white;}
 
@@ -424,6 +395,26 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .ai-status-dot.unknown{background:#d1d5db;}
 .ai-status-text{font-size:11px;font-weight:600;}
 .default-model-select{border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;background:white;cursor:pointer;}
+.admin-model-group{margin-bottom:14px;}
+.admin-model-group-label{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.admin-model-card{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:0;padding:0;border:1.5px solid #e2e8f0;border-radius:10px;cursor:pointer;transition:border-color .15s,background .15s;margin-bottom:5px;overflow:hidden;background:white;}
+.admin-model-card:hover{border-color:#a5b4fc;background:#fafafa;}
+.admin-model-card.selected{border-color:#6366f1;background:#f5f3ff;}
+.admin-model-card-left{padding:10px 8px 10px 12px;display:flex;align-items:center;}
+.admin-model-card-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.admin-model-card-dot.openai{background:#10a37f;}
+.admin-model-card-dot.claude{background:#f59e0b;}
+.admin-model-card-info{padding:10px 6px;}
+.admin-model-card-name{font-size:12px;font-weight:700;color:#0f172a;}
+.admin-model-card-note{font-size:10px;color:#64748b;margin-top:1px;}
+.admin-model-card-ctx{padding:10px 6px;}
+.admin-model-card-ctx-tag{font-size:9px;font-weight:700;color:#94a3b8;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:2px 6px;}
+.admin-model-card-price{padding:10px 12px 10px 6px;text-align:right;}
+.admin-model-card-price-in{font-size:10px;font-weight:700;color:#059669;}
+.admin-model-card-price-out{font-size:9px;color:#94a3b8;}
+.admin-model-card-check{display:none;padding:10px 12px 10px 0;color:#6366f1;font-size:13px;font-weight:700;}
+.admin-model-card.selected .admin-model-card-check{display:block;}
+.admin-model-card.selected .admin-model-card-price{display:none;}
 
 /* Custom views */
 .view-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
@@ -684,13 +675,10 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
               <button class="btn-secondary" style="padding:5px 12px;font-size:11px" onclick="testAI('claude')">Test</button>
             </div>
           </div>
-          <div style="margin-top:18px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
-            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:8px">Default Chat Model</label>
-            <select class="default-model-select" id="default-model-select" onchange="saveDefaultModel(this.value)">
-              <option value="openai">GPT-4o (OpenAI)</option>
-              <option value="claude">Claude (Anthropic)</option>
-            </select>
-            <div style="font-size:11px;color:#94a3b8;margin-top:6px">This sets which model is selected by default when opening the chat.</div>
+          <div style="margin-top:18px">
+            <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:12px">Active Chat Model</label>
+            <div id="admin-model-picker"></div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:10px">The selected model is used immediately in the chat assistant.</div>
           </div>
         </div>
 
@@ -758,13 +746,9 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
       </div>
     </div>
     <div class="chat-header-right">
-      <div class="chat-model-selector" id="model-selector">
-        <button class="chat-model-pill" id="model-pill" onclick="toggleModelDropdown(event)">
-          <span class="chat-model-pill-dot openai" id="model-pill-dot"></span>
-          <span id="model-pill-label">GPT-4o</span>
-          <span class="chat-model-pill-caret">▾</span>
-        </button>
-        <div class="chat-model-dropdown" id="model-dropdown"></div>
+      <div class="chat-model-active" id="chat-model-active">
+        <span class="chat-model-active-dot openai" id="model-pill-dot"></span>
+        <span id="model-pill-label">GPT-4o</span>
       </div>
       <button class="chat-close" onclick="toggleChat()">✕</button>
     </div>
@@ -1571,10 +1555,7 @@ function openAdmin() {
   renderAdminViews();
   renderPersonSelectGrid();
   loadAIStatus();
-  // Set default model selector
-  if (ADMIN_CONFIG?.ai?.defaultModel) {
-    document.getElementById('default-model-select').value = ADMIN_CONFIG.ai.defaultModel;
-  }
+  buildAdminModelPicker();
 }
 
 function closeAdmin() {
@@ -1695,10 +1676,51 @@ async function testAI(model) {
   } catch (e) { dot.style.background = '#ef4444'; txt.textContent = 'Error'; }
 }
 
-function saveDefaultModel(val) {
+function buildAdminModelPicker() {
+  const container = document.getElementById('admin-model-picker');
+  if (!container) return;
+  container.innerHTML = '';
+  const groups = [
+    { key: 'openai', label: '⚡ OpenAI' },
+    { key: 'claude', label: '✦ Anthropic Claude' },
+  ];
+  groups.forEach(g => {
+    const grpEl = document.createElement('div'); grpEl.className = 'admin-model-group';
+    const lblEl = document.createElement('div'); lblEl.className = 'admin-model-group-label'; lblEl.textContent = g.label;
+    grpEl.appendChild(lblEl);
+    AI_MODELS[g.key].forEach(m => {
+      const selected = g.key === CHAT_PROVIDER && m.id === CHAT_MODEL_ID;
+      const card = document.createElement('div');
+      card.className = 'admin-model-card' + (selected ? ' selected' : '');
+      card.innerHTML = `
+        <div class="admin-model-card-left"><span class="admin-model-card-dot ${g.key}"></span></div>
+        <div class="admin-model-card-info">
+          <div class="admin-model-card-name">${m.name}</div>
+          <div class="admin-model-card-note">${m.note}</div>
+        </div>
+        <div class="admin-model-card-ctx"><span class="admin-model-card-ctx-tag">${m.context}</span></div>
+        <div class="admin-model-card-price">
+          <div class="admin-model-card-price-in">$${m.inputPer1M.toFixed(2)}/1M in</div>
+          <div class="admin-model-card-price-out">$${m.outputPer1M.toFixed(2)}/1M out</div>
+        </div>
+        <div class="admin-model-card-check">✓</div>`;
+      card.onclick = () => {
+        selectModel(g.key, m.id);
+        saveDefaultModel(g.key, m.id);
+        buildAdminModelPicker();
+      };
+      grpEl.appendChild(card);
+    });
+    container.appendChild(grpEl);
+  });
+}
+
+function saveDefaultModel(provider, modelId) {
   if (!ADMIN_CONFIG.ai) ADMIN_CONFIG.ai = {};
-  ADMIN_CONFIG.ai.defaultModel = val;
-  setModel(val);
+  ADMIN_CONFIG.ai.defaultModel = provider;
+  if (provider === 'openai') ADMIN_CONFIG.ai.openaiModel = modelId;
+  else ADMIN_CONFIG.ai.claudeModel = modelId;
+  saveAdminConfig();
 }
 
 // ── Custom Views ────────────────────────────────────────────────
@@ -1873,57 +1895,6 @@ let CHAT_MODEL_ID = 'gpt-4o';
 let CHAT_OPEN = false;
 let BOARD_CONTEXT = null; // populated after boot
 
-function buildModelDropdown() {
-  const dd = document.getElementById('model-dropdown');
-  if (!dd) return;
-  dd.innerHTML = '';
-  const groups = [
-    { key: 'openai', label: 'OpenAI', icon: '⚡' },
-    { key: 'claude', label: 'Anthropic', icon: '✦' },
-  ];
-  groups.forEach((g, gi) => {
-    if (gi > 0) { const hr = document.createElement('hr'); hr.className = 'chat-model-divider'; dd.appendChild(hr); }
-    const hdr = document.createElement('div'); hdr.className = 'chat-model-group-header';
-    hdr.innerHTML = `<span class="chat-model-group-icon">${g.icon}</span><span class="chat-model-group-label">${g.label}</span>`;
-    dd.appendChild(hdr);
-    AI_MODELS[g.key].forEach(m => {
-      const selected = g.key === CHAT_PROVIDER && m.id === CHAT_MODEL_ID;
-      const row = document.createElement('div');
-      row.className = 'chat-model-option' + (selected ? ' selected' : '');
-      row.innerHTML = `
-        <div class="chat-model-option-left"><span class="chat-model-option-dot ${g.key}"></span></div>
-        <div class="chat-model-option-info">
-          <div class="chat-model-option-name">${m.name}</div>
-          <div class="chat-model-option-note">${m.note}</div>
-        </div>
-        <div class="chat-model-ctx-badge"><span class="chat-model-ctx-tag">${m.context}</span></div>
-        <div class="chat-model-option-price">
-          <div class="chat-model-option-price-in">$${m.inputPer1M.toFixed(2)} in</div>
-          <div class="chat-model-option-price-out">$${m.outputPer1M.toFixed(2)} out</div>
-        </div>
-        <div class="chat-model-option-check">✓</div>`;
-      row.onclick = () => selectModel(g.key, m.id);
-      dd.appendChild(row);
-    });
-  });
-}
-
-function toggleModelDropdown(e) {
-  e.stopPropagation();
-  const dd = document.getElementById('model-dropdown');
-  const pill = document.getElementById('model-pill');
-  const isOpen = dd.classList.contains('open');
-  if (!isOpen) buildModelDropdown();
-  dd.classList.toggle('open');
-  pill.classList.toggle('open', !isOpen);
-}
-
-document.addEventListener('click', () => {
-  const dd = document.getElementById('model-dropdown');
-  const pill = document.getElementById('model-pill');
-  if (dd) dd.classList.remove('open');
-  if (pill) pill.classList.remove('open');
-});
 
 function selectModel(provider, modelId) {
   CHAT_PROVIDER = provider;
@@ -1932,12 +1903,8 @@ function selectModel(provider, modelId) {
   const m = allModels.find(x => x.id === modelId) || { name: modelId };
   const dot = document.getElementById('model-pill-dot');
   const lbl = document.getElementById('model-pill-label');
-  if (dot) { dot.className = 'chat-model-pill-dot ' + provider; }
+  if (dot) dot.className = 'chat-model-active-dot ' + provider;
   if (lbl) lbl.textContent = m.name;
-  const dd = document.getElementById('model-dropdown');
-  const pill = document.getElementById('model-pill');
-  if (dd) dd.classList.remove('open');
-  if (pill) pill.classList.remove('open');
 }
 
 function toggleChat() {
