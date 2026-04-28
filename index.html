@@ -765,7 +765,7 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script>
 // ═══ SHARED UTILS ══════════════════════════════════════════════
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -779,6 +779,131 @@ function mondayOf(date){const d=new Date(date);if(isNaN(d))return null;const day
 function weekKey(date){const m=mondayOf(date);return m?m.toISOString().slice(0,10):null;}
 function weekLabel(key){const d=new Date(key);return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
 function addWeeks(date,n){const d=new Date(date);d.setUTCDate(d.getUTCDate()+n*7);return d;}
+
+// ═══ ECHARTS ENTERPRISE THEME & HELPERS ════════════════════════
+echarts.registerTheme('enterprise',{
+  color:['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899'],
+  backgroundColor:'transparent',
+  textStyle:{fontFamily:"-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif",fontSize:12,color:'#6b7280'},
+  title:{textStyle:{color:'#111827',fontWeight:700,fontSize:14},subtextStyle:{color:'#9ca3af',fontSize:11}},
+  legend:{textStyle:{color:'#6b7280',fontSize:11},itemWidth:10,itemHeight:10,icon:'circle'},
+  tooltip:{
+    backgroundColor:'#ffffff',
+    borderColor:'#e2e8f0',
+    borderWidth:1,
+    padding:[10,14],
+    textStyle:{color:'#0f172a',fontSize:12,fontFamily:"-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif"},
+    extraCssText:'box-shadow:0 8px 24px rgba(0,0,0,.10),0 2px 6px rgba(0,0,0,.06);border-radius:10px;',
+  },
+  categoryAxis:{axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:'#f1f5f9',width:1}},axisLabel:{color:'#6b7280',fontSize:11}},
+  valueAxis:{axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:'#f1f5f9',width:1}},axisLabel:{color:'#6b7280',fontSize:11}},
+  line:{smooth:true,lineStyle:{width:2}},
+  bar:{itemStyle:{borderRadius:[4,4,0,0]}},
+});
+
+// Shared ECharts init — handles resize automatically
+const _ecInstances=new Map();
+function ec(id){
+  if(_ecInstances.has(id)){_ecInstances.get(id).dispose();}
+  const el=document.getElementById(id);
+  if(!el)return null;
+  const inst=echarts.init(el,'enterprise',{renderer:'canvas'});
+  _ecInstances.set(id,inst);
+  new ResizeObserver(()=>inst.resize()).observe(el);
+  return inst;
+}
+
+// Shared tooltip formatter for donut/pie
+function ecPieTooltip(total){
+  return params=>`<div style="font-weight:600;color:#0f172a;margin-bottom:4px">${params.name}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${params.color}"></span>
+      <span style="font-size:13px;font-weight:700;color:${params.color}">${params.value}</span>
+      <span style="color:#94a3b8;font-size:11px">(${pct(params.value,total)}%)</span>
+    </div>`;
+}
+
+// Shared donut chart builder
+function ecDonut(id,labels,values,colors,total,centerLabel=''){
+  const inst=ec(id);if(!inst)return;
+  inst.setOption({
+    animation:true,animationDuration:700,animationEasing:'cubicOut',
+    tooltip:{trigger:'item',formatter:ecPieTooltip(total)},
+    legend:{bottom:0,type:'scroll',itemGap:10},
+    series:[{
+      type:'pie',radius:['58%','78%'],center:['50%','46%'],
+      padAngle:3,itemStyle:{borderRadius:4,borderColor:'#fff',borderWidth:2},
+      animationType:'expansion',animationDelay:i=>i*60,
+      label:{show:!!centerLabel,position:'center',formatter:()=>centerLabel,
+        rich:{val:{fontSize:28,fontWeight:800,color:'#0f172a',lineHeight:36},lbl:{fontSize:10,color:'#9ca3af',lineHeight:16}}
+      },
+      emphasis:{scaleSize:6,itemStyle:{shadowBlur:16,shadowOffsetX:0,shadowColor:'rgba(0,0,0,.12)'}},
+      data:labels.map((l,i)=>({name:l,value:values[i],itemStyle:{color:colors[i]||'#9ca3af'}})),
+    }],
+  });
+}
+
+// Shared horizontal bar chart builder
+function ecHBar(id,labels,datasets,opts={}){
+  const inst=ec(id);if(!inst)return;
+  const isStacked=opts.stacked||false;
+  inst.setOption({
+    animation:true,animationDuration:700,animationEasing:'cubicOut',
+    animationDelay:i=>i*30,
+    grid:{left:opts.labelWidth||120,right:16,top:8,bottom:opts.legend?48:8,containLabel:false},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
+      formatter:params=>{
+        const total=params.reduce((s,p)=>s+(p.value||0),0);
+        const rows=params.filter(p=>p.value>0).map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin:2px 0">
+          <span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span><span style="color:#475569">${p.seriesName}</span></span>
+          <span style="font-weight:700;color:#0f172a">${p.value}</span></div>`).join('');
+        return `<div style="font-weight:600;color:#0f172a;margin-bottom:6px;font-size:12px">${params[0].axisValue}</div>${rows}${isStacked?`<div style="border-top:1px solid #e2e8f0;margin-top:6px;padding-top:4px;display:flex;justify-content:space-between"><span style="color:#6b7280">Total</span><span style="font-weight:700">${total}</span></div>`:''}`;
+      }
+    },
+    legend:opts.legend?{bottom:0,type:'scroll',itemGap:10,textStyle:{fontSize:11}}:undefined,
+    xAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:11},min:0},
+    yAxis:{type:'category',data:labels,axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#374151',fontSize:11,width:opts.labelWidth||110,overflow:'truncate'},inverse:!!opts.inverse},
+    series:datasets.map(ds=>({
+      name:ds.label,type:'bar',data:ds.data,
+      stack:isStacked?'total':undefined,
+      itemStyle:{color:ds.color,borderRadius:isStacked?0:[0,4,4,0]},
+      barMaxWidth:opts.barMaxWidth||28,
+      emphasis:{focus:'series'},
+    })),
+  });
+}
+
+// Shared vertical bar chart builder
+function ecVBar(id,labels,datasets,opts={}){
+  const inst=ec(id);if(!inst)return;
+  inst.setOption({
+    animation:true,animationDuration:650,animationEasing:'cubicOut',
+    animationDelay:i=>i*40,
+    grid:{left:opts.yLabelWidth||36,right:12,top:12,bottom:opts.legend?52:32,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
+      formatter:params=>{
+        const rows=params.filter(p=>p.value>0).map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin:2px 0">
+          <span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span><span style="color:#475569">${p.seriesName||p.name}</span></span>
+          <span style="font-weight:700;color:#0f172a">${p.value}</span></div>`).join('');
+        return `<div style="font-weight:600;color:#0f172a;margin-bottom:6px;font-size:12px">${params[0].axisValue}</div>${rows}`;
+      }
+    },
+    legend:opts.legend?{bottom:0,type:'scroll',itemGap:10,textStyle:{fontSize:11}}:undefined,
+    xAxis:{type:'category',data:labels,axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#6b7280',fontSize:11,rotate:opts.rotate||0,interval:0}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:11},minInterval:1},
+    series:datasets.map((ds,si)=>({
+      name:ds.label||'',type:'bar',
+      data:Array.isArray(ds.color)
+        ? ds.data.map((v,i)=>({value:v,itemStyle:{color:ds.color[i]||'#9ca3af',borderRadius:opts.stacked?[0,0,0,0]:[4,4,0,0]}}))
+        : ds.data,
+      stack:opts.stacked?'total':undefined,
+      itemStyle:Array.isArray(ds.color)?undefined:{color:ds.color||'#6366f1',borderRadius:opts.stacked?[0,0,0,0]:[4,4,0,0]},
+      barMaxWidth:opts.barMaxWidth||40,
+      emphasis:{focus:'series'},
+      label:opts.showLabel?{show:true,position:'top',color:'#6b7280',fontSize:10,formatter:v=>v.value||''}:undefined,
+    })),
+  });
+}
 
 async function mondayQuery(query,variables){
   const res=await fetch('/api/monday',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,variables})});
@@ -977,25 +1102,63 @@ function aimRenderStatusStrip(stats){
 
 function aimRenderOverview(stats){
   const target=document.getElementById('aim-tab-overview');
-  target.innerHTML=`<div class="grid-3"><div class="card"><h3>Status Mix</h3><div class="subtitle">All statuses · monday colors</div><div class="chart-wrap"><canvas id="ao-status"></canvas></div></div><div class="card"><h3>Priority Mix</h3><div class="chart-wrap"><canvas id="ao-priority"></canvas></div></div><div class="card"><h3>Approval Status</h3><div class="chart-wrap"><canvas id="ao-approval"></canvas></div></div></div><div class="grid-2" style="margin-top:18px"><div class="card"><h3>Items by Type</h3><div class="subtitle">See "By Type" tab for full breakdown</div><div class="chart-wrap tall"><canvas id="ao-type"></canvas></div></div><div class="card"><h3>Security Domain</h3><div class="chart-wrap tall"><canvas id="ao-domain"></canvas></div></div></div><div class="grid-2" style="margin-top:18px"><div class="card"><h3>Progress Distribution</h3><div class="chart-wrap"><canvas id="ao-progress"></canvas></div></div><div class="card"><h3>Tools / Platforms</h3><div class="chart-wrap"><canvas id="ao-tools"></canvas></div></div></div>`;
+  target.innerHTML=`
+    <div class="grid-3">
+      <div class="card"><h3>Status Mix</h3><div class="subtitle">All statuses · monday colors</div><div class="chart-wrap" id="ao-status"></div></div>
+      <div class="card"><h3>Priority Mix</h3><div class="chart-wrap" id="ao-priority"></div></div>
+      <div class="card"><h3>Approval Status</h3><div class="chart-wrap" id="ao-approval"></div></div>
+    </div>
+    <div class="grid-2" style="margin-top:18px">
+      <div class="card"><h3>Items by Type</h3><div class="subtitle">Stacked by status</div><div class="chart-wrap tall" id="ao-type"></div></div>
+      <div class="card"><h3>Security Domain</h3><div class="subtitle">Top 10 domains</div><div class="chart-wrap tall" id="ao-domain"></div></div>
+    </div>
+    <div class="grid-2" style="margin-top:18px">
+      <div class="card"><h3>Progress Distribution</h3><div class="subtitle">Items by completion bucket</div><div class="chart-wrap" id="ao-progress"></div></div>
+      <div class="card"><h3>Tools / Platforms</h3><div class="subtitle">Top 10 tools</div><div class="chart-wrap" id="ao-tools"></div></div>
+    </div>`;
+
+  // Status donut
   const statusEntries=AIM_STATUS_ORDER.filter(s=>stats.byStatus[s]).map(s=>[s,stats.byStatus[s]]);
-  new Chart(document.getElementById('ao-status'),{type:'doughnut',data:{labels:statusEntries.map(e=>aimDisplayStatus(e[0])),datasets:[{data:statusEntries.map(e=>e[1]),backgroundColor:statusEntries.map(e=>AIM_STATUS_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:6,font:{size:10}}},tooltip:{callbacks:{label:c=>`${c.label}: ${c.parsed} (${pct(c.parsed,stats.total)}%)`}}}}});
+  ecDonut('ao-status',statusEntries.map(e=>aimDisplayStatus(e[0])),statusEntries.map(e=>e[1]),statusEntries.map(e=>AIM_STATUS_COLOR[e[0]]||'#9ca3af'),stats.total,`{val|${stats.total}}\n{lbl|Total}`);
+
+  // Priority donut
   const prioEntries=AIM_PRIORITY_ORDER.filter(p=>stats.byPriority[p]).map(p=>[p,stats.byPriority[p]]);
-  new Chart(document.getElementById('ao-priority'),{type:'doughnut',data:{labels:prioEntries.map(e=>e[0]),datasets:[{data:prioEntries.map(e=>e[1]),backgroundColor:prioEntries.map(e=>AIM_PRIORITY_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}}}}});
+  ecDonut('ao-priority',prioEntries.map(e=>e[0]),prioEntries.map(e=>e[1]),prioEntries.map(e=>AIM_PRIORITY_COLOR[e[0]]||'#9ca3af'),stats.total,`{val|${stats.total}}\n{lbl|Items}`);
+
+  // Approval donut
+  const apprColors={'Pending Approval':'#f59e0b','Approved':'#10b981','Rejected':'#ef4444','Not Required':'#9ca3af'};
   const apprEntries=Object.entries(stats.byApproval).sort((a,b)=>b[1]-a[1]);
-  const apprColors={'Pending Approval':'#fdab3d','Approved':'#00c875','Rejected':'#df2f4a','Not Required':'#9ca3af'};
-  new Chart(document.getElementById('ao-approval'),{type:'doughnut',data:{labels:apprEntries.map(e=>e[0]),datasets:[{data:apprEntries.map(e=>e[1]),backgroundColor:apprEntries.map(e=>apprColors[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}}}}});
+  ecDonut('ao-approval',apprEntries.map(e=>e[0]),apprEntries.map(e=>e[1]),apprEntries.map(e=>apprColors[e[0]]||'#9ca3af'),stats.total,'');
+
+  // Items by type — stacked horizontal bar
   const typeEntries=Object.entries(stats.byType).sort((a,b)=>b[1].total-a[1].total);
-  const typeDatasets=AIM_STATUS_ORDER.map(s=>({label:aimDisplayStatus(s),data:typeEntries.map(e=>e[1].byStatus[s]||0),backgroundColor:AIM_STATUS_COLOR[s]||'#9ca3af',stack:'a'})).filter(ds=>ds.data.some(v=>v>0));
-  new Chart(document.getElementById('ao-type'),{type:'bar',data:{labels:typeEntries.map(e=>e[0]),datasets:typeDatasets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:6,font:{size:10}}}},scales:{x:{stacked:true,ticks:{font:{size:11},precision:0}},y:{stacked:true,ticks:{font:{size:11}}}}}});
+  const typeDatasets=AIM_STATUS_ORDER.map(s=>({label:aimDisplayStatus(s),data:typeEntries.map(e=>e[1].byStatus[s]||0),color:AIM_STATUS_COLOR[s]||'#9ca3af'})).filter(ds=>ds.data.some(v=>v>0));
+  ecHBar('ao-type',typeEntries.map(e=>e[0]),typeDatasets,{stacked:true,legend:true,labelWidth:130,barMaxWidth:24,inverse:true});
+
+  // Security domain — horizontal bar
   const domEntries=Object.entries(stats.byDomain).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  new Chart(document.getElementById('ao-domain'),{type:'bar',data:{labels:domEntries.map(e=>e[0]),datasets:[{label:'Items',data:domEntries.map(e=>e[1]),backgroundColor:'#1e40af'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11},precision:0}},y:{ticks:{font:{size:11}}}}}});
-  const pBuckets=['0%','1-25%','26-50%','51-75%','76-99%','100%'];
-  new Chart(document.getElementById('ao-progress'),{type:'bar',data:{labels:pBuckets,datasets:[{label:'Items',data:pBuckets.map(b=>stats.progressBuckets[b]),backgroundColor:['#9ca3af','#fbbf24','#f59e0b','#0ea5e9','#3b82f6','#10b981']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},precision:0}}}}});
-  const AIM_TOOLS_COL='dropdown_mm01yqz8';const byTools={};for(const it of stats.items){const t=(it.column_values||{})[AIM_TOOLS_COL];if(t)for(const x of String(t).split(',').map(s=>s.trim()).filter(Boolean))byTools[x]=(byTools[x]||0)+1;}
+  ecHBar('ao-domain',domEntries.map(e=>e[0]),[{label:'Items',data:domEntries.map(e=>e[1]),color:'#6366f1'}],{stacked:false,legend:false,labelWidth:130,barMaxWidth:24,inverse:true});
+
+  // Progress distribution — vertical bar with per-bar colors
+  const pBuckets=['0%','1–25%','26–50%','51–75%','76–99%','100%'];
+  const pColors=['#9ca3af','#fbbf24','#f59e0b','#0ea5e9','#3b82f6','#10b981'];
+  const pData=Object.values(stats.progressBuckets);
+  const pInst=ec('ao-progress');
+  if(pInst)pInst.setOption({
+    animation:true,animationDuration:650,animationEasing:'cubicOut',animationDelay:i=>i*50,
+    grid:{left:8,right:8,top:12,bottom:28,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:p=>`<div style="font-weight:600;color:#0f172a;margin-bottom:4px">${p[0].axisValue}</div><div style="font-weight:700;color:${pColors[p[0].dataIndex]}">${p[0].value} items</div>`},
+    xAxis:{type:'category',data:pBuckets,axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#6b7280',fontSize:11}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:11},minInterval:1},
+    series:[{type:'bar',data:pData.map((v,i)=>({value:v,itemStyle:{color:pColors[i],borderRadius:[4,4,0,0]}})),barMaxWidth:40,emphasis:{focus:'self'}}],
+  });
+
+  // Tools — horizontal bar
+  const AIM_TOOLS_COL='dropdown_mm01yqz8';const byTools={};
+  for(const it of stats.items){const t=(it.column_values||{})[AIM_TOOLS_COL];if(t)for(const x of String(t).split(',').map(s=>s.trim()).filter(Boolean))byTools[x]=(byTools[x]||0)+1;}
   const toolEntries=Object.entries(byTools).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  if(toolEntries.length===0){document.getElementById('ao-tools').replaceWith(Object.assign(document.createElement('div'),{className:'empty',innerText:'No tools data.'}));}
-  else{new Chart(document.getElementById('ao-tools'),{type:'bar',data:{labels:toolEntries.map(e=>e[0]),datasets:[{label:'Items',data:toolEntries.map(e=>e[1]),backgroundColor:'#7c3aed'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11},precision:0}},y:{ticks:{font:{size:11}}}}}});}
+  if(!toolEntries.length){const el=document.getElementById('ao-tools');if(el)el.innerHTML='<div class="empty">No tools data.</div>';}
+  else{ecHBar('ao-tools',toolEntries.map(e=>e[0]),[{label:'Items',data:toolEntries.map(e=>e[1]),color:'#8b5cf6'}],{stacked:false,legend:false,labelWidth:130,barMaxWidth:22,inverse:true});}
 }
 
 function aimRenderStatus(stats){
@@ -1037,11 +1200,16 @@ function aimRenderTeam(stats){
   const people=Object.entries(stats.byAssignee).map(([name,s])=>({name,...s,open:s.total-s.done,donePct:pct(s.done,s.total)})).sort((a,b)=>b.open-a.open||b.total-a.total);
   if(!people.length){target.innerHTML='<div class="empty">No assignee data.</div>';return;}
   const top=people.slice(0,15);
-  let html=`<div class="card"><h3>Workload by Assignee</h3><div class="chart-wrap tall"><canvas id="aim-team-chart"></canvas></div></div><div class="table-card" style="margin-top:18px"><table><thead><tr><th>Person</th><th style="text-align:right">Total</th><th style="text-align:right">Open</th><th style="text-align:right">Done</th><th style="text-align:right">In Flight</th><th style="text-align:right">Blocked</th><th>Avg Progress</th></tr></thead><tbody>`;
+  let html=`<div class="card"><h3>Workload by Assignee</h3><div class="subtitle">Top ${top.length} people by open tasks</div><div class="chart-wrap tall" id="aim-team-chart"></div></div><div class="table-card" style="margin-top:18px"><table><thead><tr><th>Person</th><th style="text-align:right">Total</th><th style="text-align:right">Open</th><th style="text-align:right">Done</th><th style="text-align:right">In Flight</th><th style="text-align:right">Blocked</th><th>Avg Progress</th></tr></thead><tbody>`;
   for(const p of people){html+=`<tr><td><div class="person-cell"><div class="avatar ${avatarColor(p.name)}">${escapeHtml(initials(p.name))}</div><strong>${escapeHtml(p.name)}</strong></div></td><td style="text-align:right">${p.total}</td><td style="text-align:right"><strong>${p.open}</strong></td><td style="text-align:right">${p.done>0?`<span class="pill pill-green">${p.done}</span>`:'—'}</td><td style="text-align:right">${p.inProgress>0?`<span class="pill pill-amber">${p.inProgress}</span>`:'—'}</td><td style="text-align:right">${p.blocked>0?`<span class="pill pill-red">${p.blocked}</span>`:'—'}</td><td><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${p.avgProgress}%"></div></div><span class="pct">${p.avgProgress}%</span></div></td></tr>`;}
   html+=`</tbody></table></div>`;
   target.innerHTML=html;
-  new Chart(document.getElementById('aim-team-chart'),{type:'bar',data:{labels:top.map(p=>p.name),datasets:[{label:'Done',data:top.map(p=>p.done),backgroundColor:BUCKET_COLOR.done,stack:'a'},{label:'In Flight',data:top.map(p=>p.inProgress),backgroundColor:BUCKET_COLOR.inProgress,stack:'a'},{label:'Not Started',data:top.map(p=>p.notStarted),backgroundColor:BUCKET_COLOR.notStarted,stack:'a'},{label:'Blocked',data:top.map(p=>p.blocked),backgroundColor:BUCKET_COLOR.blocked,stack:'a'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:11}}},y:{stacked:true,beginAtZero:true,ticks:{font:{size:11},precision:0}}}}});
+  ecHBar('aim-team-chart',top.map(p=>p.name),[
+    {label:'Done',data:top.map(p=>p.done),color:BUCKET_COLOR.done},
+    {label:'In Flight',data:top.map(p=>p.inProgress),color:BUCKET_COLOR.inProgress},
+    {label:'Not Started',data:top.map(p=>p.notStarted),color:BUCKET_COLOR.notStarted},
+    {label:'Blocked',data:top.map(p=>p.blocked),color:BUCKET_COLOR.blocked},
+  ],{stacked:true,legend:true,labelWidth:110,barMaxWidth:22,inverse:true});
 }
 
 let AIM_ACTIVE_CACHE=[],AIM_ACTIVE_FILTER={search:'',type:'All',status:'All',sort:'priority'};
@@ -1142,8 +1310,8 @@ function harleyRenderOverview(stats){
   const donePct=pct(done,stats.total);
   target.innerHTML=`
     <div class="grid-2" style="margin-bottom:18px">
-      <div class="card"><h3>Status Distribution</h3><div class="subtitle">Current state of all tasks</div><div class="chart-wrap"><canvas id="h-o-status"></canvas></div></div>
-      <div class="card"><h3>Priority Distribution</h3><div class="subtitle">Tasks by priority level</div><div class="chart-wrap"><canvas id="h-o-priority"></canvas></div></div>
+      <div class="card"><h3>Status Distribution</h3><div class="subtitle">Current state of all tasks</div><div class="chart-wrap" id="h-o-status"></div></div>
+      <div class="card"><h3>Priority Distribution</h3><div class="subtitle">Tasks by priority level</div><div class="chart-wrap" id="h-o-priority"></div></div>
     </div>
     <div class="grid-2">
       <div class="card"><h3>Overall Completion</h3><div class="subtitle">Tasks done vs total</div>
@@ -1164,9 +1332,9 @@ function harleyRenderOverview(stats){
       </div>
     </div>`;
   const statusEntries=HARLEY_STATUS_ORDER.filter(s=>stats.byStatus[s]).map(s=>[s,stats.byStatus[s]]);
-  new Chart(document.getElementById('h-o-status'),{type:'doughnut',data:{labels:statusEntries.map(e=>e[0]),datasets:[{data:statusEntries.map(e=>e[1]),backgroundColor:statusEntries.map(e=>HARLEY_STATUS_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.label}: ${c.parsed} (${pct(c.parsed,stats.total)}%)`}}}}});
+  ecDonut('h-o-status',statusEntries.map(e=>e[0]),statusEntries.map(e=>e[1]),statusEntries.map(e=>HARLEY_STATUS_COLOR[e[0]]||'#9ca3af'),stats.total,`{val|${stats.total}}\n{lbl|Tasks}`);
   const prioEntries=HARLEY_PRIORITY_ORDER.filter(p=>stats.byPriority[p]).map(p=>[p,stats.byPriority[p]]);
-  new Chart(document.getElementById('h-o-priority'),{type:'doughnut',data:{labels:prioEntries.map(e=>e[0]),datasets:[{data:prioEntries.map(e=>e[1]),backgroundColor:prioEntries.map(e=>HARLEY_PRIORITY_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}}}}});
+  ecDonut('h-o-priority',prioEntries.map(e=>e[0]),prioEntries.map(e=>e[1]),prioEntries.map(e=>HARLEY_PRIORITY_COLOR[e[0]]||'#9ca3af'),stats.total,'');
 }
 
 function harleyRenderPriority(stats){
@@ -1243,8 +1411,8 @@ function ptRenderOverview(stats){
   const donePct=pct(done,stats.total);const spDonePct=pct(stats.doneSP,stats.totalSP);
   target.innerHTML=`
     <div class="grid-2" style="margin-bottom:18px">
-      <div class="card"><h3>Status Distribution</h3><div class="subtitle">Current state of all tasks</div><div class="chart-wrap"><canvas id="pt-o-status"></canvas></div></div>
-      <div class="card"><h3>Priority Distribution</h3><div class="subtitle">Tasks by priority level</div><div class="chart-wrap"><canvas id="pt-o-priority"></canvas></div></div>
+      <div class="card"><h3>Status Distribution</h3><div class="subtitle">Current state of all tasks</div><div class="chart-wrap" id="pt-o-status"></div></div>
+      <div class="card"><h3>Priority Distribution</h3><div class="subtitle">Tasks by priority level</div><div class="chart-wrap" id="pt-o-priority"></div></div>
     </div>
     <div class="grid-3">
       <div class="card"><h3>Overall Completion</h3><div class="subtitle">Tasks done vs total</div>
@@ -1261,19 +1429,19 @@ function ptRenderOverview(stats){
           <div class="progress-wrap" style="margin-top:16px"><div class="progress-fill" style="width:${spDonePct}%;background:linear-gradient(90deg,#3b82f6,#6366f1)"></div></div>
         </div>
       </div>
-      <div class="card"><h3>SP by Status</h3><div class="subtitle">Effort distribution</div><div class="chart-wrap short"><canvas id="pt-o-sp"></canvas></div></div>
+      <div class="card"><h3>SP by Status</h3><div class="subtitle">Effort distribution</div><div class="chart-wrap short" id="pt-o-sp"></div></div>
     </div>
     <div class="section-title">Recent Activity</div>
     <div class="table-card"><table><thead><tr><th>Task</th><th>Status</th><th>Priority</th><th>SP</th></tr></thead><tbody>
     ${stats.items.slice().sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,10).map(it=>{const cv=it.column_values||{};return `<tr><td><a class="item-link" href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></td><td>${ptStatusPill(cv[PT_COL.status])}</td><td>${ptPriorityPill(cv[PT_COL.priority])}</td><td><span class="sp-badge">${cv[PT_COL.sp]||'—'}</span></td></tr>`;}).join('')}
     </tbody></table></div>`;
   const statusEntries=PT_STATUS_ORDER.filter(s=>stats.byStatus[s]).map(s=>[s,stats.byStatus[s]]);
-  new Chart(document.getElementById('pt-o-status'),{type:'doughnut',data:{labels:statusEntries.map(e=>e[0]),datasets:[{data:statusEntries.map(e=>e[1]),backgroundColor:statusEntries.map(e=>PT_STATUS_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.label}: ${c.parsed} (${pct(c.parsed,stats.total)}%)`}}}}});
+  ecDonut('pt-o-status',statusEntries.map(e=>e[0]),statusEntries.map(e=>e[1]),statusEntries.map(e=>PT_STATUS_COLOR[e[0]]||'#9ca3af'),stats.total,`{val|${stats.total}}\n{lbl|Tasks}`);
   const prioEntries=PT_PRIORITY_ORDER.filter(p=>stats.byPriority[p]).map(p=>[p,stats.byPriority[p]]);
-  new Chart(document.getElementById('pt-o-priority'),{type:'doughnut',data:{labels:prioEntries.map(e=>e[0]),datasets:[{data:prioEntries.map(e=>e[1]),backgroundColor:prioEntries.map(e=>PT_PRIORITY_COLOR[e[0]]||'#9ca3af'),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:8,font:{size:11}}}}}});
+  ecDonut('pt-o-priority',prioEntries.map(e=>e[0]),prioEntries.map(e=>e[1]),prioEntries.map(e=>PT_PRIORITY_COLOR[e[0]]||'#9ca3af'),stats.total,'');
   const spByStatus={};for(const it of stats.items){const cv=it.column_values||{};const s=cv[PT_COL.status]||'Unknown';const sp=parseFloat(cv[PT_COL.sp])||0;spByStatus[s]=(spByStatus[s]||0)+sp;}
   const spEntries=Object.entries(spByStatus).sort((a,b)=>b[1]-a[1]);
-  new Chart(document.getElementById('pt-o-sp'),{type:'bar',data:{labels:spEntries.map(e=>e[0]),datasets:[{label:'SP',data:spEntries.map(e=>e[1]),backgroundColor:spEntries.map(e=>PT_STATUS_COLOR[e[0]]||'#9ca3af')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},precision:0}}}}});
+  ecVBar('pt-o-sp',spEntries.map(e=>e[0]),[{label:'SP',data:spEntries.map(e=>e[1]),color:spEntries.map(e=>PT_STATUS_COLOR[e[0]]||'#9ca3af')}],{barMaxWidth:36});
 }
 
 function ptRenderPriority(stats){
