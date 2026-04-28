@@ -26,12 +26,21 @@
       "icon": "🎯",
       "color": "linear-gradient(135deg,#6366f1,#8b5cf6)",
       "enabled": true
+    },
+    {
+      "id": "iter",
+      "boardId": "18391776041",
+      "name": "Iterations",
+      "description": "Team Missions 2026",
+      "icon": "🗺️",
+      "color": "linear-gradient(135deg,#059669,#047857)",
+      "enabled": true
     }
   ],
   "ai": {
-    "defaultModel": "openai",
-    "openaiModel": "gpt-4o",
-    "claudeModel": "claude-sonnet-4-6"
+    "defaultModel": "claude",
+    "openaiModel": "gpt-4.1",
+    "claudeModel": "claude-opus-4-7"
   },
   "customViews": []
 }

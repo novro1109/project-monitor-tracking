@@ -460,6 +460,37 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .person-kpi .pk-lbl{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-top:4px;font-weight:600;}
 .admin-save-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid #e2e8f0;background:#f8fafc;flex-shrink:0;}
 .save-status{font-size:12px;color:#22c55e;font-weight:600;display:none;}
+/* Team search dropdown */
+.team-drop-item{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:12px;color:rgba(255,255,255,.8);transition:background .1s;}
+.team-drop-item:hover{background:rgba(255,255,255,.08);}
+.team-drop-avatar{width:22px;height:22px;border-radius:50%;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+/* Team view */
+.team-view-header{display:flex;align-items:center;gap:14px;margin-bottom:22px;padding:18px 22px;background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:14px;color:white;}
+.team-view-avatar{width:48px;height:48px;border-radius:50%;color:white;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;border:2px solid rgba(255,255,255,.2);}
+.team-view-name{font-size:18px;font-weight:800;color:white;}
+.team-view-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px;}
+.team-board-section{margin-bottom:24px;}
+.team-board-label{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.team-board-label::after{content:'';flex:1;height:1px;background:#e2e8f0;}
+.team-task-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:4px;transition:background .12s;}
+.team-task-row:hover{background:#f1f5f9;}
+.team-task-name{flex:1;font-size:12.5px;font-weight:500;color:#1e293b;min-width:0;}
+.team-task-name a{color:#1e293b;text-decoration:none;}
+.team-task-name a:hover{color:#4f46e5;text-decoration:underline;}
+.team-task-empty{color:#94a3b8;font-size:12px;font-style:italic;padding:6px 10px;}
+.team-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:22px;}
+.team-kpi{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.team-kpi .tv{font-size:22px;font-weight:800;color:#0f172a;line-height:1;}
+.team-kpi .tl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-top:4px;font-weight:700;}
+/* Iteration board styles */
+.iter-mission-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #f1f5f9;margin-bottom:5px;}
+.iter-mission-name{flex:1;font-size:12.5px;font-weight:600;color:#1e293b;}
+.iter-mission-name a{color:#1e293b;text-decoration:none;}
+.iter-mission-name a:hover{color:#059669;text-decoration:underline;}
+.iter-push-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;flex-shrink:0;}
+.iter-push-pill.push{background:#fef3c7;color:#92400e;}
+.iter-push-pill.nopush{background:#d1fae5;color:#065f46;}
+.iter-push-pill.unknown{background:#f1f5f9;color:#64748b;}
 
 /* Sidebar gear btn */
 .sidebar-gear-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:none;background:transparent;cursor:pointer;color:rgba(255,255,255,.3);font-size:12px;font-family:inherit;border-radius:8px;transition:all .15s;margin-top:4px;}
@@ -512,6 +543,28 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
         </div>
         <div class="board-active-dot"></div>
       </button>
+      <button class="board-btn" data-board="iter" onclick="switchBoard('iter')">
+        <div class="board-icon" style="background:linear-gradient(135deg,#059669,#047857)">🗺️</div>
+        <div class="board-info">
+          <div class="board-name">Iterations</div>
+          <div class="board-desc">Team Missions 2026</div>
+        </div>
+        <div class="board-active-dot"></div>
+      </button>
+    </div>
+
+    <!-- Team Search -->
+    <div style="padding:10px 10px 0">
+      <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.2);text-transform:uppercase;letter-spacing:1px;padding:0 4px 6px">Team View</div>
+      <div style="position:relative">
+        <input id="team-search-input" placeholder="Search team member…" autocomplete="off"
+          style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;font-size:11.5px;font-family:inherit;color:rgba(255,255,255,.85);outline:none;box-sizing:border-box;"
+          oninput="teamSearchFilter(this.value)"
+          onkeydown="if(event.key==='Enter')teamSearchGo()"
+          onfocus="document.getElementById('team-search-drop').style.display='block'"
+        >
+        <div id="team-search-drop" style="display:none;position:absolute;left:0;right:0;top:calc(100%+4px);background:#1e1b4b;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+      </div>
     </div>
   </div>
 
@@ -574,6 +627,20 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
       <div id="pt-tab-active"     class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div id="pt-tab-backlog"    class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div id="pt-tab-done"       class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+    </div>
+
+    <!-- ── Iterations Board ───────────────────────────────────── -->
+    <div class="board-view" id="board-iter">
+      <div class="kpi-row cols-4" id="iter-kpi"></div>
+      <div id="iter-tab-overview" class="tab-content active"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+      <div id="iter-tab-active"   class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+      <div id="iter-tab-pushed"   class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+      <div id="iter-tab-all"      class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+    </div>
+
+    <!-- ── Team Member View ───────────────────────────────────── -->
+    <div class="board-view" id="board-team">
+      <div id="team-view-body"><div class="empty">Search for a team member using the sidebar to see all their work across every board.</div></div>
     </div>
   </div>
 </div>
@@ -997,6 +1064,23 @@ const NAV_CONFIG = {
         { id:'done',    icon:'✅', label:'Completed' },
       ]},
     ]
+  },
+  iter: {
+    title: 'Iterations — Team Missions 2026',
+    sections: [
+      { label: 'Dashboard', items: [
+        { id:'overview', icon:'📊', label:'By Team Member' },
+        { id:'active',   icon:'✅', label:'Stable' },
+        { id:'pushed',   icon:'⏭️',  label:'Push Next Iter' },
+        { id:'all',      icon:'📋', label:'All Missions' },
+      ]},
+    ]
+  },
+  team: {
+    title: 'Team Member View',
+    sections: [
+      { label: 'Search', items: [] },
+    ]
   }
 };
 
@@ -1021,10 +1105,12 @@ function switchBoard(board) {
   document.querySelectorAll('.board-view').forEach(v=>v.classList.toggle('active',v.id==='board-'+board));
   document.getElementById('topbar-title').textContent=NAV_CONFIG[board].title;
   renderNav(board);
-  // restore first tab
-  document.querySelectorAll(`#board-${board} .tab-content`).forEach(c=>c.classList.remove('active'));
-  const first=document.getElementById(`${board}-tab-overview`);
-  if(first)first.classList.add('active');
+  // restore first tab (team board has no tabs)
+  if (board !== 'team') {
+    document.querySelectorAll(`#board-${board} .tab-content`).forEach(c=>c.classList.remove('active'));
+    const first=document.getElementById(`${board}-tab-overview`);
+    if(first)first.classList.add('active');
+  }
 }
 
 function switchTab(tab) {
@@ -1867,6 +1953,266 @@ function closePersonView() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ITERATIONS BOARD LOGIC
+// ═══════════════════════════════════════════════════════════════
+const ITER_BOARD = 18391776041;
+const ITER_COL = {
+  push: 'color_mkzy4ahq',
+  iterStarts: 'color_mm01yqgw',
+  startDate: 'date_mm018jsq',
+};
+
+// Known team members extracted from board column headers
+const ITER_TEAM_NAMES = ['Aviv','Nov','Asaf','Maor','Kamille','Kerry','Yonni','Nehoray','Yuval','Yaniv','Zal','Barak'];
+
+function iterBuildStats(items) {
+  const stats = { total: items.length, active: [], pushed: [], doNotPush: [], items };
+  for (const it of items) {
+    const cv = it.column_values || {};
+    const push = cv[ITER_COL.push] || '';
+    if (push === 'Push') stats.pushed.push(it);
+    else if (push === 'Do Not Push') stats.doNotPush.push(it);
+    else stats.active.push(it);
+  }
+  return stats;
+}
+
+function iterMissionRow(it) {
+  const cv = it.column_values || {};
+  const push = cv[ITER_COL.push] || '';
+  let pillClass = 'unknown', pillLabel = 'Active';
+  if (push === 'Push') { pillClass = 'push'; pillLabel = 'Push Next'; }
+  else if (push === 'Do Not Push') { pillClass = 'nopush'; pillLabel = 'Stable'; }
+  return `<div class="iter-mission-row">
+    <div class="iter-mission-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>
+    <span class="iter-push-pill ${pillClass}">${pillLabel}</span>
+  </div>`;
+}
+
+function iterRenderKpi(stats) {
+  document.getElementById('iter-kpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-value">${stats.total}</div><div class="kpi-label">Total Missions</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="color:#059669">${stats.doNotPush.length}</div><div class="kpi-label">Stable</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="color:#f59e0b">${stats.pushed.length}</div><div class="kpi-label">Push Next Iter</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="color:#6366f1">${stats.active.length}</div><div class="kpi-label">Unclassified</div></div>`;
+}
+
+function iterRenderOverview(stats) {
+  const el = document.getElementById('iter-tab-overview');
+  if (!el) return;
+  // Group missions by implied owner (name at start of item)
+  const byPerson = {};
+  const unowned = [];
+  for (const it of stats.items) {
+    const match = ITER_TEAM_NAMES.find(n => it.name.toLowerCase().startsWith(n.toLowerCase() + ' ') || it.name.toLowerCase().startsWith(n.toLowerCase() + '-'));
+    if (match) { (byPerson[match] = byPerson[match] || []).push(it); }
+    else unowned.push(it);
+  }
+  let html = '<div class="section-title">Missions by Team Member</div>';
+  const sorted = Object.entries(byPerson).sort((a,b) => b[1].length - a[1].length);
+  for (const [person, missions] of sorted) {
+    html += `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${escapeHtml(person)} (${missions.length})</div>`;
+    html += missions.map(iterMissionRow).join('');
+    html += '</div>';
+  }
+  if (unowned.length) {
+    html += `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Shared / General (${unowned.length})</div>`;
+    html += unowned.map(iterMissionRow).join('');
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function iterRenderActive(stats) {
+  const el = document.getElementById('iter-tab-active');
+  if (!el) return;
+  const items = stats.doNotPush;
+  el.innerHTML = `<div class="section-title">Stable Missions (${items.length})</div>` +
+    (items.length ? items.map(iterMissionRow).join('') : '<div class="empty">No stable missions.</div>');
+}
+
+function iterRenderPushed(stats) {
+  const el = document.getElementById('iter-tab-pushed');
+  if (!el) return;
+  const items = stats.pushed;
+  el.innerHTML = `<div class="section-title">Push to Next Iteration (${items.length})</div>` +
+    (items.length ? items.map(iterMissionRow).join('') : '<div class="empty">Nothing marked for push.</div>');
+}
+
+function iterRenderAll(stats) {
+  const el = document.getElementById('iter-tab-all');
+  if (!el) return;
+  el.innerHTML = `<div class="section-title">All Missions (${stats.total})</div>` +
+    stats.items.map(iterMissionRow).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEAM MEMBER SEARCH & VIEW
+// ═══════════════════════════════════════════════════════════════
+
+// All known people across boards — built at boot from AIM assignees + ITER team names
+let ALL_KNOWN_PEOPLE = [];
+
+function buildPeopleIndex() {
+  const people = new Set(ITER_TEAM_NAMES);
+  const aimItems = ALL_BOARD_DATA.aim?.items || [];
+  for (const it of aimItems) {
+    const assignee = (it.column_values || {})[AIM_COL.assignee] || '';
+    splitPeople(assignee).forEach(p => { if (p) people.add(p); });
+  }
+  ALL_KNOWN_PEOPLE = [...people].sort();
+}
+
+function teamSearchFilter(val) {
+  const drop = document.getElementById('team-search-drop');
+  if (!val.trim()) { drop.style.display = 'none'; return; }
+  const q = val.toLowerCase();
+  const matches = ALL_KNOWN_PEOPLE.filter(p => p.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { drop.style.display = 'none'; return; }
+  drop.innerHTML = matches.map(p => `
+    <div class="team-drop-item" onclick="teamSearchSelect('${escapeHtml(p)}')">
+      <div class="team-drop-avatar ${avatarColor(p)}">${initials(p)}</div>
+      <span>${escapeHtml(p)}</span>
+    </div>`).join('');
+  drop.style.display = 'block';
+}
+
+function teamSearchGo() {
+  const val = document.getElementById('team-search-input').value.trim();
+  if (val) teamSearchSelect(val);
+}
+
+function teamSearchSelect(name) {
+  document.getElementById('team-search-input').value = name;
+  document.getElementById('team-search-drop').style.display = 'none';
+  openTeamView(name);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#team-search-input') && !e.target.closest('#team-search-drop')) {
+    const d = document.getElementById('team-search-drop');
+    if (d) d.style.display = 'none';
+  }
+});
+
+function openTeamView(name) {
+  // Switch to team board view
+  switchBoard('team');
+
+  const aimItems   = ALL_BOARD_DATA.aim?.items    || [];
+  const harleyItems= ALL_BOARD_DATA.harley?.items  || [];
+  const ptItems    = ALL_BOARD_DATA.pt?.items      || [];
+  const iterItems  = ALL_BOARD_DATA.iter?.items    || [];
+
+  const nameLower = name.toLowerCase();
+
+  // AIM — has assignee column
+  const aimMatches = aimItems.filter(it => {
+    const a = (it.column_values||{})[AIM_COL.assignee] || '';
+    return splitPeople(a).some(p => p.toLowerCase() === nameLower);
+  });
+
+  // Harley — no assignee; match by name in item name
+  const harleyMatches = harleyItems.filter(it => it.name.toLowerCase().includes(nameLower));
+
+  // PT — no assignee; match by name in item name
+  const ptMatches = ptItems.filter(it => it.name.toLowerCase().includes(nameLower));
+
+  // Iterations — match by name prefix convention
+  const iterMatches = iterItems.filter(it =>
+    it.name.toLowerCase().startsWith(nameLower + ' ') ||
+    it.name.toLowerCase().startsWith(nameLower + '-') ||
+    it.name.toLowerCase().includes(' ' + nameLower + ' ') ||
+    it.name.toLowerCase().includes('- ' + nameLower + ' ')
+  );
+
+  const total = aimMatches.length + harleyMatches.length + ptMatches.length + iterMatches.length;
+
+  // KPI counts
+  const aimDone   = aimMatches.filter(it => aimBucketOf((it.column_values||{})[AIM_COL.status]) === 'done').length;
+  const aimWip    = aimMatches.filter(it => aimBucketOf((it.column_values||{})[AIM_COL.status]) === 'inProgress').length;
+  const aimBlocked= aimMatches.filter(it => aimBucketOf((it.column_values||{})[AIM_COL.status]) === 'blocked').length;
+
+  function taskRow(it, nameEl, statusEl) {
+    return `<div class="team-task-row">
+      <div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>
+      ${statusEl || ''}
+    </div>`;
+  }
+
+  let html = `
+    <div class="team-view-header">
+      <div class="team-view-avatar ${avatarColor(name)}">${initials(name)}</div>
+      <div>
+        <div class="team-view-name">${escapeHtml(name)}</div>
+        <div class="team-view-sub">${total} item${total!==1?'s':''} across all boards</div>
+      </div>
+    </div>
+    <div class="team-kpi-row">
+      <div class="team-kpi"><div class="tv">${total}</div><div class="tl">Total</div></div>
+      <div class="team-kpi"><div class="tv" style="color:#6366f1">${aimMatches.length}</div><div class="tl">IAM Tasks</div></div>
+      <div class="team-kpi"><div class="tv" style="color:#059669">${iterMatches.length}</div><div class="tl">Missions</div></div>
+      <div class="team-kpi"><div class="tv" style="color:#f59e0b">${aimWip}</div><div class="tl">In Progress</div></div>
+      <div class="team-kpi"><div class="tv" style="color:#ef4444">${aimBlocked}</div><div class="tl">Blocked</div></div>
+    </div>`;
+
+  // Iterations section
+  html += `<div class="team-board-section"><div class="team-board-label">🗺️ Iterations — Team Missions (${iterMatches.length})</div>`;
+  if (!iterMatches.length) html += `<div class="team-task-empty">No missions found for ${escapeHtml(name)}.</div>`;
+  else iterMatches.forEach(it => {
+    const cv = it.column_values || {};
+    const push = cv[ITER_COL.push] || '';
+    let pill = ''; if (push === 'Push') pill = '<span class="iter-push-pill push" style="font-size:9px">Push Next</span>'; else if (push === 'Do Not Push') pill = '<span class="iter-push-pill nopush" style="font-size:9px">Stable</span>';
+    html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${pill}</div>`;
+  });
+  html += '</div>';
+
+  // AIM section
+  html += `<div class="team-board-section"><div class="team-board-label">🔐 Access & Identity Management (${aimMatches.length})</div>`;
+  if (!aimMatches.length) html += `<div class="team-task-empty">No tasks assigned in this board.</div>`;
+  else {
+    const groups = { inProgress:[], notStarted:[], blocked:[], done:[] };
+    aimMatches.forEach(it => { const b = aimBucketOf((it.column_values||{})[AIM_COL.status]); (groups[b]||groups.notStarted).push(it); });
+    [['blocked','🚨 Blocked'],['inProgress','⚡ In Progress'],['notStarted','🔲 Not Started'],['done','✅ Done']].forEach(([key,lbl]) => {
+      if (!groups[key]?.length) return;
+      html += `<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 5px">${lbl}</div>`;
+      groups[key].forEach(it => {
+        const cv = it.column_values||{};
+        const prio = cv[AIM_COL.priority];
+        const due = cv[AIM_COL.due];
+        const dueDays = daysUntil(due);
+        const dueStr = due ? `<span style="font-size:11px;color:${dueDays!=null&&dueDays<0?'#dc2626':'#94a3b8'}">${fmtDate(due)}</span>` : '';
+        const prioTag = prio ? `<span class="skill-tag skill-tag-${prio.toLowerCase()}">${prio}</span>` : '';
+        html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${prioTag}${dueStr}${aimStatusPill(cv[AIM_COL.status])}</div>`;
+      });
+    });
+  }
+  html += '</div>';
+
+  // PT section
+  if (ptMatches.length) {
+    html += `<div class="team-board-section"><div class="team-board-label">🎯 Project Tracking — Control Up (${ptMatches.length})</div>`;
+    ptMatches.forEach(it => {
+      const cv = it.column_values||{};
+      html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${ptStatusPill(cv[PT_COL.status])}</div>`;
+    });
+    html += '</div>';
+  }
+
+  // Harley section
+  if (harleyMatches.length) {
+    html += `<div class="team-board-section"><div class="team-board-label">🤖 Harley — Ask-it (${harleyMatches.length})</div>`;
+    harleyMatches.forEach(it => {
+      const cv = it.column_values||{};
+      html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${harleyStatusPill(cv[HARLEY_COL.status])}</div>`;
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('team-view-body').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AI CHAT
 // ═══════════════════════════════════════════════════════════════
 const AI_MODELS = {
@@ -2217,11 +2563,12 @@ loadAdminConfig().then(cfg => {
 
 (async()=>{
   try{
-    // Load all three boards in parallel
-    const [aimItems,harleyItems,ptItems]=await Promise.all([
+    // Load all four boards in parallel
+    const [aimItems,harleyItems,ptItems,iterItems]=await Promise.all([
       fetchBoard(AIM_BOARD,Object.values(AIM_COL)),
       fetchBoard(HARLEY_BOARD,Object.values(HARLEY_COL)),
       fetchBoard(PT_BOARD,Object.values(PT_COL)),
+      fetchBoard(ITER_BOARD,Object.values(ITER_COL)),
     ]);
 
     // AIM
@@ -2258,14 +2605,25 @@ loadAdminConfig().then(cfg => {
     setBadge('pt-active-badge',ptStats.byStatus['In Progress']||0);
     setBadge('pt-backlog-badge',ptStats.byStatus['Not Started']||0);
 
-    // Store all board data for admin console
-    ALL_BOARD_DATA = { aim: aimStats, harley: harleyStats, pt: ptStats };
+    // Iterations
+    const iterStats=iterBuildStats(iterItems);
+    iterRenderKpi(iterStats);
+    iterRenderOverview(iterStats);
+    iterRenderActive(iterStats);
+    iterRenderPushed(iterStats);
+    iterRenderAll(iterStats);
+
+    // Store all board data
+    ALL_BOARD_DATA = { aim: aimStats, harley: harleyStats, pt: ptStats, iter: iterStats };
+
+    // Build people index for team search
+    buildPeopleIndex();
 
     // Build AI context from all board data
     BOARD_CONTEXT = buildBoardContext(aimStats, harleyStats, ptStats);
-    document.getElementById('chat-status-sub').textContent = `${aimStats.total + harleyStats.total + ptStats.total} tasks loaded across 3 boards`;
+    document.getElementById('chat-status-sub').textContent = `${aimStats.total + harleyStats.total + ptStats.total + iterStats.total} items loaded across 4 boards`;
 
-    document.getElementById('topbar-sub').textContent=`AIM: ${aimStats.total} tasks · ${pct(aimStats.buckets.done,aimStats.total)}% done  |  Harley: ${harleyStats.total} tasks · ${pct(harleyStats.byStatus['Done']||0,harleyStats.total)}% done  |  Projects: ${ptStats.total} tasks · ${pct(ptStats.byStatus['Done']||0,ptStats.total)}% done`;
+    document.getElementById('topbar-sub').textContent=`AIM: ${aimStats.total} tasks · ${pct(aimStats.buckets.done,aimStats.total)}% done  |  Harley: ${harleyStats.total} tasks  |  Projects: ${ptStats.total} tasks  |  Iterations: ${iterStats.total} missions`;
     document.getElementById('last-updated').textContent=`Refreshed ${new Date().toLocaleTimeString()}`;
     setStatusBadge(true);
   } catch(e){
