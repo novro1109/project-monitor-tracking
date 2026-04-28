@@ -254,28 +254,38 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 .chat-subtitle{color:rgba(255,255,255,.4);font-size:10px;margin-top:2px;}
 .chat-header-right{display:flex;align-items:center;gap:6px;position:relative;z-index:1;}
 .chat-model-selector{position:relative;}
-.chat-model-pill{display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:4px 10px 4px 8px;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit;color:rgba(255,255,255,.9);transition:background .15s;white-space:nowrap;}
-.chat-model-pill:hover{background:rgba(0,0,0,.35);}
-.chat-model-pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.chat-model-pill-dot.openai{background:#10a37f;}
-.chat-model-pill-dot.claude{background:#d97706;}
-.chat-model-pill-caret{opacity:.5;font-size:9px;margin-left:2px;}
-.chat-model-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:#1e1b4b;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;min-width:270px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:1000;display:none;}
-.chat-model-dropdown.open{display:block;}
-.chat-model-group-label{font-size:9px;font-weight:700;letter-spacing:.8px;color:rgba(255,255,255,.35);text-transform:uppercase;padding:4px 8px 2px;margin-top:2px;}
-.chat-model-option{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:background .12s;}
-.chat-model-option:hover{background:rgba(255,255,255,.07);}
-.chat-model-option.selected{background:rgba(255,255,255,.1);}
-.chat-model-option-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;}
-.chat-model-option-dot.openai{background:#10a37f;}
-.chat-model-option-dot.claude{background:#d97706;}
-.chat-model-option-info{flex:1;min-width:0;}
-.chat-model-option-name{font-size:11px;font-weight:700;color:rgba(255,255,255,.9);}
-.chat-model-option-note{font-size:9px;color:rgba(255,255,255,.4);margin-top:1px;}
-.chat-model-option-price{text-align:right;flex-shrink:0;}
-.chat-model-option-price-in{font-size:9px;color:#34d399;font-weight:600;}
-.chat-model-option-price-out{font-size:9px;color:rgba(255,255,255,.35);}
-.chat-model-divider{border:none;border-top:1px solid rgba(255,255,255,.06);margin:4px 0;}
+.chat-model-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:5px 11px 5px 9px;cursor:pointer;font-size:10.5px;font-weight:700;font-family:inherit;color:rgba(255,255,255,.92);transition:background .15s,border-color .15s;white-space:nowrap;letter-spacing:.1px;}
+.chat-model-pill:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);}
+.chat-model-pill-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 5px currentColor;}
+.chat-model-pill-dot.openai{background:#10a37f;color:#10a37f;}
+.chat-model-pill-dot.claude{background:#f59e0b;color:#f59e0b;}
+.chat-model-pill-caret{opacity:.45;font-size:8px;margin-left:1px;transition:transform .2s;}
+.chat-model-pill.open .chat-model-pill-caret{transform:rotate(180deg);}
+@keyframes dropdownIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.chat-model-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:rgba(15,12,48,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:8px;min-width:290px;box-shadow:0 16px 48px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06);z-index:1000;display:none;}
+.chat-model-dropdown.open{display:block;animation:dropdownIn .18s cubic-bezier(.16,1,.3,1) both;}
+.chat-model-group-header{display:flex;align-items:center;gap:6px;padding:6px 10px 4px;margin-top:2px;}
+.chat-model-group-icon{font-size:12px;opacity:.7;}
+.chat-model-group-label{font-size:9px;font-weight:800;letter-spacing:.9px;color:rgba(255,255,255,.3);text-transform:uppercase;}
+.chat-model-option{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:0;padding:0;border-radius:10px;cursor:pointer;transition:background .12s;overflow:hidden;margin-bottom:1px;}
+.chat-model-option:hover{background:rgba(255,255,255,.06);}
+.chat-model-option.selected{background:rgba(255,255,255,.09);}
+.chat-model-option-left{display:flex;align-items:center;justify-content:center;padding:10px 6px 10px 10px;}
+.chat-model-option-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px currentColor;}
+.chat-model-option-dot.openai{background:#10a37f;color:#10a37f;}
+.chat-model-option-dot.claude{background:#f59e0b;color:#f59e0b;}
+.chat-model-option-info{padding:9px 6px 9px 4px;min-width:0;}
+.chat-model-option-name{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.92);line-height:1.2;}
+.chat-model-option-note{font-size:9px;color:rgba(255,255,255,.35);margin-top:2px;line-height:1.3;}
+.chat-model-ctx-badge{padding:9px 6px 9px 0;flex-shrink:0;}
+.chat-model-ctx-tag{font-size:8.5px;font-weight:700;color:rgba(255,255,255,.3);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px;letter-spacing:.2px;}
+.chat-model-option-price{text-align:right;padding:9px 10px 9px 4px;flex-shrink:0;}
+.chat-model-option-price-in{font-size:9.5px;color:#34d399;font-weight:700;line-height:1.4;}
+.chat-model-option-price-out{font-size:8.5px;color:rgba(255,255,255,.28);line-height:1.4;}
+.chat-model-option-check{width:18px;display:none;color:#a78bfa;font-size:11px;padding-right:6px;}
+.chat-model-option.selected .chat-model-option-check{display:flex;align-items:center;justify-content:center;}
+.chat-model-option.selected .chat-model-option-price{display:none;}
+.chat-model-divider{border:none;border-top:1px solid rgba(255,255,255,.05);margin:6px 4px;}
 .chat-close{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);width:28px;height:28px;border-radius:50%;cursor:pointer;color:rgba(255,255,255,.5);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
 .chat-close:hover{background:rgba(255,255,255,.18);color:white;}
 
@@ -1868,25 +1878,30 @@ function buildModelDropdown() {
   if (!dd) return;
   dd.innerHTML = '';
   const groups = [
-    { key: 'openai', label: 'OpenAI' },
-    { key: 'claude', label: 'Anthropic Claude' },
+    { key: 'openai', label: 'OpenAI', icon: '⚡' },
+    { key: 'claude', label: 'Anthropic', icon: '✦' },
   ];
   groups.forEach((g, gi) => {
     if (gi > 0) { const hr = document.createElement('hr'); hr.className = 'chat-model-divider'; dd.appendChild(hr); }
-    const lbl = document.createElement('div'); lbl.className = 'chat-model-group-label'; lbl.textContent = g.label; dd.appendChild(lbl);
+    const hdr = document.createElement('div'); hdr.className = 'chat-model-group-header';
+    hdr.innerHTML = `<span class="chat-model-group-icon">${g.icon}</span><span class="chat-model-group-label">${g.label}</span>`;
+    dd.appendChild(hdr);
     AI_MODELS[g.key].forEach(m => {
+      const selected = g.key === CHAT_PROVIDER && m.id === CHAT_MODEL_ID;
       const row = document.createElement('div');
-      row.className = 'chat-model-option' + (g.key === CHAT_PROVIDER && m.id === CHAT_MODEL_ID ? ' selected' : '');
+      row.className = 'chat-model-option' + (selected ? ' selected' : '');
       row.innerHTML = `
-        <span class="chat-model-option-dot ${g.key}"></span>
+        <div class="chat-model-option-left"><span class="chat-model-option-dot ${g.key}"></span></div>
         <div class="chat-model-option-info">
-          <div class="chat-model-option-name">${m.name} <span style="font-weight:400;font-size:9px;color:rgba(255,255,255,.3)">${m.context}</span></div>
+          <div class="chat-model-option-name">${m.name}</div>
           <div class="chat-model-option-note">${m.note}</div>
         </div>
+        <div class="chat-model-ctx-badge"><span class="chat-model-ctx-tag">${m.context}</span></div>
         <div class="chat-model-option-price">
-          <div class="chat-model-option-price-in">$${m.inputPer1M.toFixed(2)}/1M in</div>
-          <div class="chat-model-option-price-out">$${m.outputPer1M.toFixed(2)}/1M out</div>
-        </div>`;
+          <div class="chat-model-option-price-in">$${m.inputPer1M.toFixed(2)} in</div>
+          <div class="chat-model-option-price-out">$${m.outputPer1M.toFixed(2)} out</div>
+        </div>
+        <div class="chat-model-option-check">✓</div>`;
       row.onclick = () => selectModel(g.key, m.id);
       dd.appendChild(row);
     });
@@ -1896,14 +1911,18 @@ function buildModelDropdown() {
 function toggleModelDropdown(e) {
   e.stopPropagation();
   const dd = document.getElementById('model-dropdown');
+  const pill = document.getElementById('model-pill');
   const isOpen = dd.classList.contains('open');
   if (!isOpen) buildModelDropdown();
   dd.classList.toggle('open');
+  pill.classList.toggle('open', !isOpen);
 }
 
 document.addEventListener('click', () => {
   const dd = document.getElementById('model-dropdown');
+  const pill = document.getElementById('model-pill');
   if (dd) dd.classList.remove('open');
+  if (pill) pill.classList.remove('open');
 });
 
 function selectModel(provider, modelId) {
@@ -1916,7 +1935,9 @@ function selectModel(provider, modelId) {
   if (dot) { dot.className = 'chat-model-pill-dot ' + provider; }
   if (lbl) lbl.textContent = m.name;
   const dd = document.getElementById('model-dropdown');
+  const pill = document.getElementById('model-pill');
   if (dd) dd.classList.remove('open');
+  if (pill) pill.classList.remove('open');
 }
 
 function toggleChat() {
