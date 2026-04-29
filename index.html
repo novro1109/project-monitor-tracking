@@ -1993,7 +1993,6 @@ const ITER_COL = {
 };
 
 // Known team members extracted from board column headers
-const ITER_TEAM_NAMES = ['Aviv','Nov','Asaf','Maor','Kamille','Kerry','Yonni','Nehoray','Yuval','Yaniv','Zal','Barak'];
 
 function iterBuildStats(items) {
   const stats = { total: items.length, active: [], pushed: [], doNotPush: [], items };
@@ -2093,11 +2092,17 @@ function iterRenderAll(stats) {
 let ALL_KNOWN_PEOPLE = [];
 
 function buildPeopleIndex() {
-  const people = new Set(ITER_TEAM_NAMES);
+  const people = new Set();
+  // AIM assignees (full names)
   const aimItems = ALL_BOARD_DATA.aim?.items || [];
   for (const it of aimItems) {
     const assignee = (it.column_values || {})[AIM_COL.assignee] || '';
     splitPeople(assignee).forEach(p => { if (p) people.add(p); });
+  }
+  // Iter _owners (full names resolved from linked IT Projects board)
+  const iterItems = ALL_BOARD_DATA.iter?.items || [];
+  for (const it of iterItems) {
+    (it._owners || []).forEach(o => { if (o) people.add(o); });
   }
   ALL_KNOWN_PEOPLE = [...people].sort();
   document.getElementById('member-tracking-sub').textContent = `${ALL_KNOWN_PEOPLE.length} members`;
