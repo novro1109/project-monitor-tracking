@@ -3,25 +3,37 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
+// Load secrets from Monday Code secret manager into process.env at startup
+try {
+  const { EnvironmentVariablesManager } = require('@mondaycom/apps-sdk');
+  const envManager = new EnvironmentVariablesManager({ updateProcessEnv: true });
+  // Explicitly pull each secret into process.env in case updateProcessEnv missed them
+  const keys = ['MONDAY_API_TOKEN','ANTHROPIC_API_KEY','OPENAI_API_KEY','CLIENT_SECRET'];
+  keys.forEach(k => {
+    const val = envManager.get(k);
+    if (val) { process.env[k] = val; console.log(`[secrets] Loaded ${k}`); }
+  });
+} catch(e) {
+  console.log('[secrets] Using .env (local dev):', e.message);
+}
+
 const app = express();
-const PORT = process.env.PORT || 3000;
-// On Monday Code, token comes from requests (OAuth). Locally, fallback to .env.
+const PORT = process.env.PORT || 8080;
 const MONDAY_API_TOKEN_LOCAL = process.env.MONDAY_API_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const CACHE_TTL_MS = 5 * 60 * 1000; // refresh every 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// Resolve monday token — prefer per-request token (Monday Code OAuth), fallback to .env
 function getMondayToken(req) {
-  // Monday SDK sends the session token in Authorization header as "Bearer <token>"
   const auth = req?.headers?.authorization;
   if (auth && auth.startsWith('Bearer ')) return auth.slice(7);
   return MONDAY_API_TOKEN_LOCAL;
 }
 
-// For background cache jobs we still need a static token
 if (!MONDAY_API_TOKEN_LOCAL) {
-  console.warn('WARNING: MONDAY_API_TOKEN not set — background cache disabled. Set via mapps code:env or .env');
+  console.warn('WARNING: MONDAY_API_TOKEN not set — check Monday Code secret manager or .env');
+} else {
+  console.log('[token] MONDAY_API_TOKEN loaded OK');
 }
 
 app.use(express.json({ limit: '2mb' }));
