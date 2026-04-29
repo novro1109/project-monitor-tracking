@@ -908,11 +908,16 @@ async function initMondaySDK() {
   }
 }
 
-// Wrapper around fetch that adds Authorization header when token available
+// Backend URL — when served from Monday CDN, calls go to Monday Code backend
+const BACKEND_URL = window.location.hostname.includes('monday.app') || window.location.hostname.includes('cdn2.monday')
+  ? 'https://cd33b-service-5-f18a51a0.us.monday.app'
+  : ''; // empty = relative paths for local dev
+
+// Wrapper around fetch that adds Authorization header and backend URL
 function apiFetch(url, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (MONDAY_SESSION_TOKEN) headers['Authorization'] = `Bearer ${MONDAY_SESSION_TOKEN}`;
-  return fetch(url, { ...opts, headers });
+  return fetch(BACKEND_URL + url, { ...opts, headers });
 }
 </script>
 <script>
