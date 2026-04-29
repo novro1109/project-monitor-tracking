@@ -1175,7 +1175,7 @@ const AIM_STATUS_COLOR={'In Progress':'#fdab3d','Completed':'#00c875','Blocked':
 const AIM_STATUS_BUCKETS={done:['Completed','No Need For Access Profiel'],inProgress:['In Progress','Under Review','Partly Completed','Connected under validation'],blocked:['Blocked'],notStarted:['Not Started']};
 const AIM_PRIORITY_COLOR={'Critical':'#7f1d1d','High':'#ea580c','Medium':'#2563eb','Low':'#6b7280'};
 const AIM_PRIORITY_ORDER=['Critical','High','Medium','Low'];
-const AIM_TYPE_ORDER=['Access Profile','Access Request','UAR','Connector','Policy','Documentation'];
+const AIM_TYPE_ORDER=['Access Profile','Access Request','UAR','Connector','Policy','Documentation','Not Started'];
 
 function aimDisplayStatus(s){return AIM_STATUS_DISPLAY[s]||s;}
 function aimBucketOf(status){if(!status)return 'other';for(const k of Object.keys(AIM_STATUS_BUCKETS))if(AIM_STATUS_BUCKETS[k].includes(status))return k;return 'other';}
