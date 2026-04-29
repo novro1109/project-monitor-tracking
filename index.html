@@ -910,12 +910,15 @@ echarts.registerTheme('enterprise',{
   bar:{itemStyle:{borderRadius:[4,4,0,0]}},
 });
 
-// Shared ECharts init — handles resize automatically
+// Shared ECharts init — reuses existing instances, handles resize automatically
 const _ecInstances=new Map();
 function ec(id){
-  if(_ecInstances.has(id)){_ecInstances.get(id).dispose();}
   const el=document.getElementById(id);
   if(!el)return null;
+  if(_ecInstances.has(id)){
+    const existing=_ecInstances.get(id);
+    if(!existing.isDisposed())return existing;
+  }
   const inst=echarts.init(el,'enterprise',{renderer:'canvas'});
   _ecInstances.set(id,inst);
   new ResizeObserver(()=>inst.resize()).observe(el);
@@ -936,7 +939,7 @@ function ecPieTooltip(total){
 function ecDonut(id,labels,values,colors,total,centerLabel=''){
   const inst=ec(id);if(!inst)return;
   inst.setOption({
-    animation:true,animationDuration:700,animationEasing:'cubicOut',
+    animation:true,animationDuration:400,animationEasing:'cubicOut',
     tooltip:{trigger:'item',formatter:ecPieTooltip(total)},
     legend:{bottom:0,type:'scroll',itemGap:10},
     series:[{
@@ -957,7 +960,7 @@ function ecHBar(id,labels,datasets,opts={}){
   const inst=ec(id);if(!inst)return;
   const isStacked=opts.stacked||false;
   inst.setOption({
-    animation:true,animationDuration:700,animationEasing:'cubicOut',
+    animation:true,animationDuration:400,animationEasing:'cubicOut',
     animationDelay:i=>i*30,
     grid:{left:opts.labelWidth||120,right:16,top:8,bottom:opts.legend?48:8,containLabel:false},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
@@ -986,7 +989,7 @@ function ecHBar(id,labels,datasets,opts={}){
 function ecVBar(id,labels,datasets,opts={}){
   const inst=ec(id);if(!inst)return;
   inst.setOption({
-    animation:true,animationDuration:650,animationEasing:'cubicOut',
+    animation:true,animationDuration:400,animationEasing:'cubicOut',
     animationDelay:i=>i*40,
     grid:{left:opts.yLabelWidth||36,right:12,top:12,bottom:opts.legend?52:32,containLabel:true},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
@@ -1142,6 +1145,9 @@ function switchBoard(board) {
   }
 }
 
+// Tracks which tabs have been rendered so we only render each once
+const _renderedTabs = new Set();
+
 function switchTab(tab) {
   CURRENT.tab=tab;
   const board=CURRENT.board;
@@ -1149,6 +1155,39 @@ function switchTab(tab) {
   document.querySelectorAll(`#board-${board} .tab-content`).forEach(c=>c.classList.remove('active'));
   const el=document.getElementById(`${board}-tab-${tab}`);
   if(el)el.classList.add('active');
+  // Lazy-render tab on first visit
+  const key=`${board}-${tab}`;
+  if(!_renderedTabs.has(key)&&ALL_BOARD_DATA[board]){
+    _renderedTabs.add(key);
+    requestAnimationFrame(()=>_lazyRenderTab(board,tab));
+  }
+}
+
+function _lazyRenderTab(board,tab){
+  if(board==='aim'){
+    const s=ALL_BOARD_DATA.aim;
+    if(tab==='status')aimRenderStatus(s);
+    else if(tab==='type')aimRenderType(s);
+    else if(tab==='team')aimRenderTeam(s);
+    else if(tab==='active')aimRenderActive(s);
+    else if(tab==='risk')aimRenderRisk(s);
+  } else if(board==='harley'){
+    const s=ALL_BOARD_DATA.harley;
+    if(tab==='priority')harleyRenderPriority(s);
+    else if(tab==='active')harleyRenderActive(s);
+    else if(tab==='done')harleyRenderDone(s);
+  } else if(board==='pt'){
+    const s=ALL_BOARD_DATA.pt;
+    if(tab==='priority')ptRenderPriority(s);
+    else if(tab==='active')ptRenderActive(s);
+    else if(tab==='backlog')ptRenderBacklog(s);
+    else if(tab==='done')ptRenderDone(s);
+  } else if(board==='iter'){
+    const s=ALL_BOARD_DATA.iter;
+    if(tab==='active')iterRenderActive(s);
+    else if(tab==='pushed')iterRenderPushed(s);
+    else if(tab==='all')iterRenderAll(s);
+  }
 }
 
 function setBadge(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
@@ -1279,7 +1318,7 @@ function aimRenderOverview(stats){
   const pData=Object.values(stats.progressBuckets);
   const pInst=ec('ao-progress');
   if(pInst)pInst.setOption({
-    animation:true,animationDuration:650,animationEasing:'cubicOut',animationDelay:i=>i*50,
+    animation:true,animationDuration:400,animationEasing:'cubicOut',animationDelay:i=>i*50,
     grid:{left:8,right:8,top:12,bottom:28,containLabel:true},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:p=>`<div style="font-weight:600;color:#0f172a;margin-bottom:4px">${p[0].axisValue}</div><div style="font-weight:700;color:${pColors[p[0].dataIndex]}">${p[0].value} items</div>`},
     xAxis:{type:'category',data:pBuckets,axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#6b7280',fontSize:11}},
@@ -2617,47 +2656,39 @@ loadAdminConfig().then(cfg => {
 });
 
 async function loadAndRender(aimItems, harleyItems, ptItems, iterItems) {
-    // AIM
+    // Reset lazy-render tracker so re-fetches re-render everything
+    _renderedTabs.clear();
+
+    // AIM — render KPI + overview only; other tabs rendered lazily on first visit
     const aimStats=aimBuildStats(aimItems);
     aimRenderKpi(aimStats);
     aimRenderStatusStrip(aimStats);
     aimRenderOverview(aimStats);
-    aimRenderStatus(aimStats);
-    aimRenderType(aimStats);
-    aimRenderTeam(aimStats);
-    aimRenderActive(aimStats);
-    aimRenderRisk(aimStats);
+    _renderedTabs.add('aim-overview');
     setBadge('aim-active-badge',aimStats.buckets.inProgress);
     setBadge('aim-risk-badge',aimStats.buckets.blocked+aimStats.overdue+aimStats.pendingApproval);
 
-    // Harley
+    // Harley — KPI + overview only
     const harleyStats=harleyBuildStats(harleyItems);
     harleyRenderKpi(harleyStats);
     harleyRenderStatusStrip(harleyStats);
     harleyRenderOverview(harleyStats);
-    harleyRenderPriority(harleyStats);
-    harleyRenderActive(harleyStats);
-    harleyRenderDone(harleyStats);
+    _renderedTabs.add('harley-overview');
     setBadge('harley-active-badge',harleyStats.byStatus['Working on it']||0);
 
-    // PT
+    // PT — KPI + overview only
     const ptStats=ptBuildStats(ptItems);
     ptRenderKpi(ptStats);
     ptRenderOverview(ptStats);
-    ptRenderPriority(ptStats);
-    ptRenderActive(ptStats);
-    ptRenderBacklog(ptStats);
-    ptRenderDone(ptStats);
+    _renderedTabs.add('pt-overview');
     setBadge('pt-active-badge',ptStats.byStatus['In Progress']||0);
     setBadge('pt-backlog-badge',ptStats.byStatus['Not Started']||0);
 
-    // Iterations
+    // Iterations — KPI + overview only
     const iterStats=iterBuildStats(iterItems);
     iterRenderKpi(iterStats);
     iterRenderOverview(iterStats);
-    iterRenderActive(iterStats);
-    iterRenderPushed(iterStats);
-    iterRenderAll(iterStats);
+    _renderedTabs.add('iter-overview');
 
     // Store all board data
     ALL_BOARD_DATA = { aim: aimStats, harley: harleyStats, pt: ptStats, iter: iterStats };
