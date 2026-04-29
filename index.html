@@ -888,6 +888,33 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<!-- Monday SDK — provides OAuth token when running inside Monday.com -->
+<script src="https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js"></script>
+<script>
+// ── Monday SDK init ──────────────────────────────────────────
+const monday = window.mondaySdk ? window.mondaySdk() : null;
+let MONDAY_SESSION_TOKEN = null; // populated async when inside Monday iframe
+
+async function initMondaySDK() {
+  if (!monday) return;
+  try {
+    monday.setApiVersion('2024-01');
+    // Get the session token — this is the OAuth token for this user
+    const ctx = await monday.get('sessionToken');
+    MONDAY_SESSION_TOKEN = ctx?.data || null;
+    if (MONDAY_SESSION_TOKEN) console.log('[monday-sdk] Session token acquired');
+  } catch(e) {
+    console.log('[monday-sdk] Not running inside Monday.com iframe:', e.message);
+  }
+}
+
+// Wrapper around fetch that adds Authorization header when token available
+function apiFetch(url, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (MONDAY_SESSION_TOKEN) headers['Authorization'] = `Bearer ${MONDAY_SESSION_TOKEN}`;
+  return fetch(url, { ...opts, headers });
+}
+</script>
 <script>
 // ═══ SHARED UTILS ══════════════════════════════════════════════
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -1031,7 +1058,7 @@ function ecVBar(id,labels,datasets,opts={}){
 }
 
 async function mondayQuery(query,variables){
-  const res=await fetch('/api/monday',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,variables})});
+  const res=await apiFetch('/api/monday',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,variables})});
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const json=await res.json();
   if(json.errors) throw new Error(json.errors.map(e=>e.message).join('; '));
@@ -1776,13 +1803,13 @@ let PROBE_DATA = null; // last probed board info
 let ALL_BOARD_DATA = {};
 
 async function loadAdminConfig() {
-  const res = await fetch('/api/config');
+  const res = await apiFetch('/api/config');
   ADMIN_CONFIG = await res.json();
   return ADMIN_CONFIG;
 }
 
 async function saveConfig() {
-  const res = await fetch('/api/config', {
+  const res = await apiFetch('/api/config', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(ADMIN_CONFIG),
@@ -1855,7 +1882,7 @@ async function probeBoard() {
   btn.disabled = true; btn.textContent = '⏳ Checking…';
   res.style.display = 'none';
   try {
-    const r = await fetch('/api/probe-board', {
+    const r = await apiFetch('/api/probe-board', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ boardId }),
     });
@@ -1904,7 +1931,7 @@ async function loadAIStatus() {
     dot.className = 'ai-status-dot unknown';
     txt.textContent = 'Checking…';
     try {
-      const r = await fetch('/api/test-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model}) });
+      const r = await apiFetch('/api/test-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model}) });
       const d = await r.json();
       if (d.ok) { dot.style.background = '#22c55e'; txt.textContent = 'Connected'; txt.style.color = '#166534'; }
       else { dot.style.background = '#ef4444'; txt.textContent = d.error || 'Not configured'; txt.style.color = '#991b1b'; }
@@ -1917,7 +1944,7 @@ async function testAI(model) {
   const txt = document.getElementById(model + '-status');
   dot.style.background = '#fbbf24'; txt.textContent = 'Testing…'; txt.style.color = '#92400e';
   try {
-    const r = await fetch('/api/test-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model}) });
+    const r = await apiFetch('/api/test-ai', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model}) });
     const d = await r.json();
     if (d.ok) { dot.style.background = '#22c55e'; txt.textContent = 'Connected ✓'; txt.style.color = '#166534'; }
     else { dot.style.background = '#ef4444'; txt.textContent = d.error || 'Failed'; txt.style.color = '#991b1b'; }
@@ -2267,7 +2294,7 @@ async function loadSprintBoard(groupId) {
   try {
     // Load sprint list if not yet loaded
     if (!SPRINT_ALL_GROUPS.length) {
-      const gr = await fetch('/api/sprints');
+      const gr = await apiFetch('/api/sprints');
       const gjson = await gr.json();
       SPRINT_ALL_GROUPS = gjson.groups || [];
     }
@@ -2904,7 +2931,7 @@ async function sendChat() {
     const allModels = [...AI_MODELS.openai, ...AI_MODELS.claude];
     const modelMeta = allModels.find(x => x.id === CHAT_MODEL_ID) || { name: CHAT_MODEL_ID };
     if (CHAT_PROVIDER === 'claude') {
-      const res = await fetch('/api/ai/claude', {
+      const res = await apiFetch('/api/ai/claude', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -2918,7 +2945,7 @@ async function sendChat() {
       if (data.error) throw new Error(data.error);
       answer = data.content?.[0]?.text || 'No response received.';
     } else {
-      const res = await fetch('/api/ai/openai', {
+      const res = await apiFetch('/api/ai/openai', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -3034,14 +3061,14 @@ async function forceRefresh() {
   const btn = document.getElementById('refresh-btn');
   if (btn) { btn.textContent = '↻ Refreshing…'; btn.disabled = true; }
   setStatusBadge(false);
-  await fetch('/api/boards-refresh', { method: 'POST' });
+  await apiFetch('/api/boards-refresh', { method: 'POST' });
   // Poll until new data is ready
   let attempts = 0;
   const prevFetchedAt = cache_fetchedAt;
   while (attempts < 40) {
     await new Promise(r => setTimeout(r, 3000));
     attempts++;
-    const r = await fetch('/api/boards-cache');
+    const r = await apiFetch('/api/boards-cache');
     if (r.ok) {
       const { data, fetchedAt, ready } = await r.json();
       if (ready && data && fetchedAt !== prevFetchedAt) {
@@ -3061,8 +3088,11 @@ async function forceRefresh() {
 
 (async()=>{
   try{
+    // Init Monday SDK first to get session token (no-op when running locally)
+    await initMondaySDK();
+
     // Try server cache first — instant response
-    const cacheRes = await fetch('/api/boards-cache');
+    const cacheRes = await apiFetch('/api/boards-cache');
     if (cacheRes.ok) {
       const { data, fetchedAt, ready } = await cacheRes.json();
       if (ready && data) {
@@ -3081,7 +3111,7 @@ async function forceRefresh() {
     while (attempts < 30) {
       await new Promise(r => setTimeout(r, 3000));
       attempts++;
-      const r2 = await fetch('/api/boards-cache');
+      const r2 = await apiFetch('/api/boards-cache');
       if (r2.ok) {
         const { data, fetchedAt, ready } = await r2.json();
         if (ready && data) {

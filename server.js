@@ -5,17 +5,34 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN;
+// On Monday Code, token comes from requests (OAuth). Locally, fallback to .env.
+const MONDAY_API_TOKEN_LOCAL = process.env.MONDAY_API_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const CACHE_TTL_MS = 5 * 60 * 1000; // refresh every 5 minutes
 
-if (!MONDAY_API_TOKEN) {
-  console.error('ERROR: MONDAY_API_TOKEN is not set in .env');
-  process.exit(1);
+// Resolve monday token — prefer per-request token (Monday Code OAuth), fallback to .env
+function getMondayToken(req) {
+  // Monday SDK sends the session token in Authorization header as "Bearer <token>"
+  const auth = req?.headers?.authorization;
+  if (auth && auth.startsWith('Bearer ')) return auth.slice(7);
+  return MONDAY_API_TOKEN_LOCAL;
+}
+
+// For background cache jobs we still need a static token
+if (!MONDAY_API_TOKEN_LOCAL) {
+  console.warn('WARNING: MONDAY_API_TOKEN not set — background cache disabled. Set via mapps code:env or .env');
 }
 
 app.use(express.json({ limit: '2mb' }));
+// CORS for Monday iframe
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 app.use(express.static(path.join(__dirname)));
 
 // ── Board cache ──────────────────────────────────────────────────
@@ -28,10 +45,12 @@ const BOARDS = [
 
 const cache = { data: null, fetchedAt: null, refreshing: false };
 
-async function mondayFetch(body) {
+async function mondayFetch(body, token) {
+  const tok = token || MONDAY_API_TOKEN_LOCAL;
+  if (!tok) throw new Error('No Monday API token available');
   const res = await fetch('https://api.monday.com/v2', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': MONDAY_API_TOKEN, 'API-Version': '2024-01' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': tok, 'API-Version': '2024-01' },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`monday HTTP ${res.status}`);
@@ -40,18 +59,18 @@ async function mondayFetch(body) {
   return json.data;
 }
 
-async function fetchBoardItems(boardId, cols) {
+async function fetchBoardItems(boardId, cols, token) {
   let items = [], cursor = null, pages = 0;
   // Use inline fragment so board_relation columns return linked_item_ids
   const cvFrag = `column_values(ids:$c){id text ... on BoardRelationValue{linked_item_ids}}`;
   while (true) {
     let data;
     if (!cursor) {
-      data = await mondayFetch({ query: `query($b:ID!,$l:Int!,$c:[String!]){boards(ids:[$b]){items_page(limit:$l){cursor items{id name url updated_at ${cvFrag}}}}}`, variables: { b: boardId, l: 500, c: cols } });
+      data = await mondayFetch({ query: `query($b:ID!,$l:Int!,$c:[String!]){boards(ids:[$b]){items_page(limit:$l){cursor items{id name url updated_at ${cvFrag}}}}}`, variables: { b: boardId, l: 500, c: cols } }, token);
       const page = data.boards[0].items_page;
       items.push(...page.items); cursor = page.cursor || null;
     } else {
-      data = await mondayFetch({ query: `query($l:Int!,$cur:String!,$c:[String!]){next_items_page(limit:$l,cursor:$cur){cursor items{id name url updated_at ${cvFrag}}}}`, variables: { l: 500, cur: cursor, c: cols } });
+      data = await mondayFetch({ query: `query($l:Int!,$cur:String!,$c:[String!]){next_items_page(limit:$l,cursor:$cur){cursor items{id name url updated_at ${cvFrag}}}}`, variables: { l: 500, cur: cursor, c: cols } }, token);
       const page = data.next_items_page;
       items.push(...page.items); cursor = page.cursor || null;
     }
@@ -61,7 +80,7 @@ async function fetchBoardItems(boardId, cols) {
 }
 
 // Resolve IT owners for iteration items via linked board items
-async function enrichIterOwners(iterItems) {
+async function enrichIterOwners(iterItems, token) {
   // Collect all unique linked item IDs
   const linkedIds = new Set();
   for (const it of iterItems) {
@@ -82,7 +101,7 @@ async function enrichIterOwners(iterItems) {
       const data = await mondayFetch({
         query: `query($ids:[ID!]!){items(ids:$ids){id column_values(ids:["multiple_person_mkyrscj4","person"]){id text}}}`,
         variables: { ids: chunk },
-      });
+      }, token);
       for (const item of (data.items || [])) {
         const owners = [];
         for (const cv of item.column_values) {
@@ -134,28 +153,72 @@ async function refreshCache() {
   }
 }
 
-// Start background refresh loop
-refreshCache();
-setInterval(refreshCache, CACHE_TTL_MS);
+// Start background refresh loop only when local token available
+if (MONDAY_API_TOKEN_LOCAL) {
+  refreshCache();
+  setInterval(refreshCache, CACHE_TTL_MS);
+} else {
+  console.log('[cache] No local token — cache will be populated on first user request');
+}
+
+// Per-token cache for Monday Code (each user/account gets own cache)
+const tokenCaches = {};
+async function refreshCacheForToken(token) {
+  const tc = tokenCaches[token] || { data: null, fetchedAt: null, refreshing: false };
+  tokenCaches[token] = tc;
+  if (tc.refreshing) return;
+  tc.refreshing = true;
+  try {
+    const results = await Promise.all(BOARDS.map(b => fetchBoardItems(b.id, b.cols, token)));
+    const data = {};
+    BOARDS.forEach((b, i) => { data[b.key] = results[i]; });
+    await enrichIterOwners(data.iter, token);
+    tc.data = data;
+    tc.fetchedAt = Date.now();
+    console.log(`[cache:token] Ready — ${Object.values(data).reduce((s,a)=>s+a.length,0)} items`);
+  } catch (err) {
+    console.error('[cache:token] Refresh failed:', err.message);
+  } finally {
+    tc.refreshing = false;
+  }
+}
 
 // Serve cached board data to browser — instant response
-app.get('/api/boards-cache', (req, res) => {
+app.get('/api/boards-cache', async (req, res) => {
+  const token = getMondayToken(req);
+  // Use per-token cache when running on Monday Code, shared cache locally
+  if (token && token !== MONDAY_API_TOKEN_LOCAL) {
+    const tc = tokenCaches[token];
+    if (tc?.data && Date.now() - tc.fetchedAt < CACHE_TTL_MS) {
+      return res.json({ data: tc.data, fetchedAt: tc.fetchedAt, ready: true });
+    }
+    // Trigger async refresh and return not-ready
+    refreshCacheForToken(token);
+    if (tc?.data) return res.json({ data: tc.data, fetchedAt: tc.fetchedAt, ready: true });
+    return res.status(503).json({ error: 'Cache warming up, try again shortly', ready: false });
+  }
   if (!cache.data) return res.status(503).json({ error: 'Cache warming up, try again shortly', ready: false });
   res.json({ data: cache.data, fetchedAt: cache.fetchedAt, ready: true });
 });
 
 // Force manual refresh
 app.post('/api/boards-refresh', (req, res) => {
-  refreshCache();
+  const token = getMondayToken(req);
+  if (token && token !== MONDAY_API_TOKEN_LOCAL) {
+    refreshCacheForToken(token);
+  } else {
+    refreshCache();
+  }
   res.json({ ok: true, message: 'Refresh started' });
 });
 
 // Proxy endpoint — keeps the monday token server-side (still used for admin probing)
 app.post('/api/monday', async (req, res) => {
+  const token = getMondayToken(req);
   try {
     const response = await fetch('https://api.monday.com/v2', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': MONDAY_API_TOKEN, 'API-Version': '2024-01' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': token, 'API-Version': '2024-01' },
       body: JSON.stringify(req.body),
     });
     const data = await response.json();
@@ -226,11 +289,12 @@ app.post('/api/config', (req, res) => {
 // Probe a monday board ID — returns board name and columns
 app.post('/api/probe-board', async (req, res) => {
   const { boardId } = req.body;
+  const token = getMondayToken(req);
   if (!boardId) return res.status(400).json({ error: 'boardId required' });
   try {
     const response = await fetch('https://api.monday.com/v2', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': MONDAY_API_TOKEN, 'API-Version': '2024-01' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': token, 'API-Version': '2024-01' },
       body: JSON.stringify({ query: `query{boards(ids:[${boardId}]){name columns{id title type}}}` }),
     });
     const data = await response.json();
@@ -264,12 +328,12 @@ function parseSprintDates(title) {
   return { start: parseD(m[1]), end: parseD(m[2]) };
 }
 
-async function fetchSprintData(groupId) {
+async function fetchSprintData(groupId, token) {
   // 1. Fetch iteration items in this sprint group
   const groupData = await mondayFetch({
     query: `query($b:ID!,$g:[String!]){boards(ids:[$b]){groups(ids:$g){id title items_page(limit:200){items{id name column_values(ids:["${SPRINT_PUSH_COL}","${SPRINT_RELATION_COL}"]){id text ... on BoardRelationValue{linked_item_ids}}}}}}}`,
     variables: { b: ITER_BOARD_ID, g: [groupId] },
-  });
+  }, token);
   const group = groupData.boards[0].groups[0];
   const iterItems = group.items_page.items;
 
@@ -295,7 +359,7 @@ async function fetchSprintData(groupId) {
       const data = await mondayFetch({
         query: `query($ids:[ID!]!){items(ids:$ids){id name url board{id name}column_values{id text}}}`,
         variables: { ids: chunk },
-      });
+      }, token);
       linkedItems.push(...(data.items || []));
     } catch(e) { console.warn('[sprint] chunk failed:', e.message); }
   }
@@ -334,13 +398,14 @@ const sprintCache = {};
 
 app.get('/api/sprint', async (req, res) => {
   const groupId = req.query.group || 'group_mm2jgqs6';
+  const token = getMondayToken(req);
+  const cacheKey = `${token?.slice(-8)}_${groupId}`;
   try {
-    // Return cached if fresh (10 min)
-    if (sprintCache[groupId] && Date.now() - sprintCache[groupId].fetchedAt < 10 * 60 * 1000) {
-      return res.json({ ...sprintCache[groupId].data, fromCache: true });
+    if (sprintCache[cacheKey] && Date.now() - sprintCache[cacheKey].fetchedAt < 10 * 60 * 1000) {
+      return res.json({ ...sprintCache[cacheKey].data, fromCache: true });
     }
-    const data = await fetchSprintData(groupId);
-    sprintCache[groupId] = { data, fetchedAt: Date.now() };
+    const data = await fetchSprintData(groupId, token);
+    sprintCache[cacheKey] = { data, fetchedAt: Date.now() };
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -349,11 +414,12 @@ app.get('/api/sprint', async (req, res) => {
 
 // Return all sprint groups (for sprint switcher)
 app.get('/api/sprints', async (req, res) => {
+  const token = getMondayToken(req);
   try {
     const data = await mondayFetch({
       query: `query($b:ID!){boards(ids:[$b]){groups{id title}}}`,
       variables: { b: ITER_BOARD_ID },
-    });
+    }, token);
     const groups = data.boards[0].groups.filter(g =>
       !g.title.toLowerCase().includes('backlog')
     ).map(g => ({ id: g.id, title: g.title, dates: parseSprintDates(g.title) }));
