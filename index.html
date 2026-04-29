@@ -1166,7 +1166,8 @@ function switchTab(tab) {
 function _lazyRenderTab(board,tab){
   if(board==='aim'){
     const s=ALL_BOARD_DATA.aim;
-    if(tab==='status')aimRenderStatus(s);
+    if(tab==='weekly')aimRenderWeekly(s);
+    else if(tab==='status')aimRenderStatus(s);
     else if(tab==='type')aimRenderType(s);
     else if(tab==='team')aimRenderTeam(s);
     else if(tab==='active')aimRenderActive(s);
@@ -1332,6 +1333,85 @@ function aimRenderOverview(stats){
   const toolEntries=Object.entries(byTools).sort((a,b)=>b[1]-a[1]).slice(0,10);
   if(!toolEntries.length){const el=document.getElementById('ao-tools');if(el)el.innerHTML='<div class="empty">No tools data.</div>';}
   else{ecHBar('ao-tools',toolEntries.map(e=>e[0]),[{label:'Items',data:toolEntries.map(e=>e[1]),color:'#8b5cf6'}],{stacked:false,legend:false,labelWidth:130,barMaxWidth:22,inverse:true});}
+}
+
+function aimRenderWeekly(stats){
+  const target=document.getElementById('aim-tab-weekly');
+  // Build week buckets for last 16 weeks
+  const WEEKS=16;
+  const now=new Date();
+  const thisMonday=mondayOf(now);
+  const weeks=[];
+  for(let i=WEEKS-1;i>=0;i--){
+    const d=addWeeks(thisMonday,-i);
+    weeks.push({key:d.toISOString().slice(0,10),label:weekLabel(d.toISOString().slice(0,10)),completed:0,items:[]});
+  }
+  const weekMap=Object.fromEntries(weeks.map(w=>[w.key,w]));
+  const cutoff=new Date(weeks[0].key);
+
+  // Count completed items by close date
+  const completedStatuses=new Set(AIM_STATUS_BUCKETS.done);
+  let totalCompleted=0;
+  for(const it of stats.items){
+    const cv=it.column_values||{};
+    if(!completedStatuses.has(cv[AIM_COL.status]))continue;
+    const d=aimEffectiveCloseDate(it);
+    if(!d||d<cutoff)continue;
+    const k=weekKey(d);
+    if(weekMap[k]){weekMap[k].completed++;weekMap[k].items.push(it);totalCompleted++;}
+  }
+
+  // Cumulative line
+  let cum=0;
+  const cumData=weeks.map(w=>{cum+=w.completed;return cum;});
+
+  // KPI strip
+  const thisWeek=weekMap[thisMonday.toISOString().slice(0,10)]||{completed:0};
+  const lastWeek=weeks[WEEKS-2]||{completed:0};
+  const avg=Math.round(weeks.reduce((s,w)=>s+w.completed,0)/WEEKS*10)/10;
+
+  target.innerHTML=`
+    <div class="kpi-row cols-4" style="margin-bottom:18px">
+      <div class="kpi accent-green"><div class="label">This Week</div><div class="value">${thisWeek.completed}</div><div class="sub">tasks completed</div></div>
+      <div class="kpi accent-blue"><div class="label">Last Week</div><div class="value">${lastWeek.completed}</div><div class="sub">tasks completed</div></div>
+      <div class="kpi accent-amber"><div class="label">Weekly Avg</div><div class="value">${avg}</div><div class="sub">over ${WEEKS} weeks</div></div>
+      <div class="kpi accent-purple"><div class="label">Total (${WEEKS}w)</div><div class="value">${totalCompleted}</div><div class="sub">items closed</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card"><h3>Completions per Week</h3><div class="subtitle">Tasks marked done or no-access</div><div class="chart-wrap tall" id="aw-bar"></div></div>
+      <div class="card"><h3>Cumulative Completions</h3><div class="subtitle">Running total over ${WEEKS} weeks</div><div class="chart-wrap tall" id="aw-line"></div></div>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h3>Completed This Week</h3>
+      <div class="subtitle">${thisWeek.items?.length||0} tasks closed</div>
+      ${!thisWeek.items?.length?'<div class="empty">No completions recorded this week yet.</div>':
+      `<div class="table-card"><table><thead><tr><th>Task</th><th>Type</th><th>Priority</th><th>Assignee</th></tr></thead><tbody>
+      ${thisWeek.items.map(it=>{const cv=it.column_values||{};const owner=splitPeople(cv[AIM_COL.assignee])[0];
+        return `<tr><td><a class="item-link" href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></td><td>${cv[AIM_COL.type]?`<span class="pill pill-indigo">${escapeHtml(cv[AIM_COL.type])}</span>`:'—'}</td><td>${aimPriorityPill(cv[AIM_COL.priority])}</td><td>${owner?`<div class="person-cell"><div class="avatar ${avatarColor(owner)}">${escapeHtml(initials(owner))}</div><span style="font-size:12px">${escapeHtml(owner)}</span></div>`:'—'}</td></tr>`;
+      }).join('')}</tbody></table></div>`}
+    </div>`;
+
+  // Bar chart — completions per week
+  const barInst=ec('aw-bar');
+  if(barInst)barInst.setOption({
+    animation:true,animationDuration:400,animationEasing:'cubicOut',
+    grid:{left:8,right:8,top:12,bottom:40,containLabel:true},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:p=>`<div style="font-weight:600;color:#0f172a;margin-bottom:4px">Week of ${p[0].axisValue}</div><div style="font-weight:700;color:#10b981">${p[0].value} completed</div>`},
+    xAxis:{type:'category',data:weeks.map(w=>w.label),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#6b7280',fontSize:10,rotate:35}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:11},minInterval:1},
+    series:[{type:'bar',data:weeks.map((w,i)=>({value:w.completed,itemStyle:{color:i===WEEKS-1?'#10b981':'#6366f1',borderRadius:[4,4,0,0]}})),barMaxWidth:32,emphasis:{focus:'self'}}],
+  });
+
+  // Line chart — cumulative
+  const lineInst=ec('aw-line');
+  if(lineInst)lineInst.setOption({
+    animation:true,animationDuration:400,animationEasing:'cubicOut',
+    grid:{left:8,right:8,top:12,bottom:40,containLabel:true},
+    tooltip:{trigger:'axis',formatter:p=>`<div style="font-weight:600;color:#0f172a;margin-bottom:4px">Week of ${p[0].axisValue}</div><div style="font-weight:700;color:#6366f1">${p[0].value} total completed</div>`},
+    xAxis:{type:'category',data:weeks.map(w=>w.label),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#6b7280',fontSize:10,rotate:35}},
+    yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:11},minInterval:1},
+    series:[{type:'line',data:cumData,smooth:true,lineStyle:{color:'#6366f1',width:2},areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:'rgba(99,102,241,0.2)'},{offset:1,color:'rgba(99,102,241,0)'}]}},itemStyle:{color:'#6366f1'},symbol:'circle',symbolSize:5}],
+  });
 }
 
 function aimRenderStatus(stats){
