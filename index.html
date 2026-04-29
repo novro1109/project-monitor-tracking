@@ -568,6 +568,14 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
         </div>
         <div class="board-active-dot"></div>
       </button>
+      <button class="board-btn" data-board="sprint" onclick="switchBoard('sprint');loadSprintBoard()">
+        <div class="board-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">⚡</div>
+        <div class="board-info">
+          <div class="board-name">Sprint Dashboard</div>
+          <div class="board-desc" id="sprint-sidebar-sub">Current sprint</div>
+        </div>
+        <div class="board-active-dot"></div>
+      </button>
       <!-- Member Tracking board-btn with expandable people list -->
       <div class="member-tracking-wrap" id="member-tracking-wrap">
         <button class="board-btn" data-board="team" id="member-tracking-btn" onclick="toggleMemberTracking(event)">
@@ -660,6 +668,11 @@ tr.row-clickable.row-active td{background:var(--blue-50)!important;box-shadow:in
       <div id="iter-tab-active"   class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div id="iter-tab-pushed"   class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
       <div id="iter-tab-all"      class="tab-content"><div class="loading"><div class="spinner"></div>Loading…</div></div>
+    </div>
+
+    <!-- ── Sprint Dashboard ──────────────────────────────────── -->
+    <div class="board-view" id="board-sprint">
+      <div id="sprint-view-body"><div class="loading"><div class="spinner"></div>Loading sprint data…</div></div>
     </div>
 
     <!-- ── Team Member View ───────────────────────────────────── -->
@@ -2226,6 +2239,235 @@ function buildPeopleIndex() {
   ALL_KNOWN_PEOPLE = [...people].sort();
   document.getElementById('member-tracking-sub').textContent = `${ALL_KNOWN_PEOPLE.length} members`;
   renderMemberList('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+const SPRINT_STATUS_COLOR = {
+  'Working on it':'#fdab3d','Working On It':'#fdab3d',
+  'Done':'#00c875','Done ✓':'#00c875',
+  'To Do':'#579bfc','Stuck':'#df2f4a',
+  'Do Not Start Yet':'#9ca3af','In Review':'#bda8f9',
+};
+const SPRINT_PRIORITY_COLOR = { Critical:'#7f1d1d', High:'#ea580c', Medium:'#2563eb', Low:'#6b7280' };
+const SPRINT_DONE_STATUSES = new Set(['Done','Done ✓','Completed']);
+const SPRINT_ACTIVE_STATUSES = new Set(['Working on it','Working On It','In Review']);
+
+let SPRINT_DATA = null;
+let SPRINT_ALL_GROUPS = [];
+let SPRINT_LOADING = false;
+
+async function loadSprintBoard(groupId) {
+  if (SPRINT_LOADING) return;
+  SPRINT_LOADING = true;
+  const body = document.getElementById('sprint-view-body');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div>Loading sprint data…</div>';
+
+  try {
+    // Load sprint list if not yet loaded
+    if (!SPRINT_ALL_GROUPS.length) {
+      const gr = await fetch('/api/sprints');
+      const gjson = await gr.json();
+      SPRINT_ALL_GROUPS = gjson.groups || [];
+    }
+    // Default to first (most recent non-backlog) group = current sprint
+    const targetGroup = groupId || SPRINT_ALL_GROUPS[0]?.id || 'group_mm2jgqs6';
+    const res = await fetch(`/api/sprint?group=${targetGroup}`);
+    SPRINT_DATA = await res.json();
+    if (SPRINT_DATA.error) throw new Error(SPRINT_DATA.error);
+    document.getElementById('sprint-sidebar-sub').textContent = SPRINT_DATA.title?.split(':')[0] || 'Sprint';
+    renderSprintDashboard();
+  } catch(e) {
+    body.innerHTML = `<div class="empty">Failed to load sprint: ${e.message}</div>`;
+  } finally {
+    SPRINT_LOADING = false;
+  }
+}
+
+function sprintStats(tasks) {
+  const total = tasks.length;
+  const done = tasks.filter(t => SPRINT_DONE_STATUSES.has(t.status)).length;
+  const active = tasks.filter(t => SPRINT_ACTIVE_STATUSES.has(t.status)).length;
+  const todo = tasks.filter(t => !SPRINT_DONE_STATUSES.has(t.status) && !SPRINT_ACTIVE_STATUSES.has(t.status) && t.status !== 'Do Not Start Yet').length;
+  const blocked = tasks.filter(t => t.status === 'Stuck').length;
+  const pushed = tasks.filter(t => t.push && t.push !== 'Do Not Push').length;
+  const totalSP = tasks.reduce((s,t) => s + (t.sp||0), 0);
+  const doneSP = tasks.filter(t => SPRINT_DONE_STATUSES.has(t.status)).reduce((s,t) => s + (t.sp||0), 0);
+  const pct = total ? Math.round(done/total*100) : 0;
+  const byStatus = {}, byPriority = {}, byOwner = {}, byDomain = {};
+  for (const t of tasks) {
+    if (t.status) byStatus[t.status] = (byStatus[t.status]||0)+1;
+    if (t.priority) byPriority[t.priority] = (byPriority[t.priority]||0)+1;
+    if (t.domain) byDomain[t.domain] = (byDomain[t.domain]||0)+1;
+    for (const p of splitPeople(t.owner||'')) {
+      if (!byOwner[p]) byOwner[p] = { total:0, done:0, active:0, todo:0, blocked:0, sp:0 };
+      byOwner[p].total++;
+      byOwner[p].sp += t.sp||0;
+      if (SPRINT_DONE_STATUSES.has(t.status)) byOwner[p].done++;
+      else if (SPRINT_ACTIVE_STATUSES.has(t.status)) byOwner[p].active++;
+      else if (t.status === 'Stuck') byOwner[p].blocked++;
+      else byOwner[p].todo++;
+    }
+  }
+  return { total, done, active, todo, blocked, pushed, totalSP, doneSP, pct, byStatus, byPriority, byOwner, byDomain };
+}
+
+function renderSprintDashboard() {
+  const { title, start, end, tasks } = SPRINT_DATA;
+  const s = sprintStats(tasks);
+  const body = document.getElementById('sprint-view-body');
+
+  // Sprint switcher options
+  const switcherOpts = SPRINT_ALL_GROUPS.map(g =>
+    `<option value="${g.id}" ${g.id === SPRINT_DATA.groupId ? 'selected' : ''}>${g.title}</option>`
+  ).join('');
+
+  // Days remaining
+  const today = new Date(); today.setHours(0,0,0,0);
+  const endDate = end ? new Date(end) : null;
+  const daysLeft = endDate ? Math.ceil((endDate - today) / 86400000) : null;
+  const daysLeftHtml = daysLeft === null ? '' : daysLeft < 0
+    ? `<span style="color:#ef4444;font-weight:600">${Math.abs(daysLeft)}d overdue</span>`
+    : daysLeft === 0 ? `<span style="color:#f59e0b;font-weight:600">Ends today</span>`
+    : `<span style="color:#10b981;font-weight:600">${daysLeft}d remaining</span>`;
+
+  // Progress ring SVG
+  const r = 36, circ = 2*Math.PI*r;
+  const dash = circ * s.pct/100;
+  const ringColor = s.pct >= 80 ? '#10b981' : s.pct >= 50 ? '#f59e0b' : '#6366f1';
+  const ring = `<svg width="100" height="100" style="transform:rotate(-90deg)">
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="${ringColor}" stroke-width="8"
+      stroke-dasharray="${dash} ${circ}" stroke-linecap="round" style="transition:stroke-dasharray .6s ease"/>
+    <text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="18" font-weight="800"
+      fill="#111827" style="transform:rotate(90deg);transform-origin:50% 50%">${s.pct}%</text>
+  </svg>`;
+
+  // Status breakdown pills
+  const statusPills = Object.entries(s.byStatus).sort((a,b)=>b[1]-a[1])
+    .map(([st,n]) => `<span class="status-pill" style="background:${SPRINT_STATUS_COLOR[st]||'#9ca3af'};font-size:11px">${escapeHtml(st)}: ${n}</span>`).join(' ');
+
+  // Owner workload table
+  const ownerRows = Object.entries(s.byOwner).sort((a,b)=>b[1].total-a[1].total).map(([name, o]) => {
+    const donePct = o.total ? Math.round(o.done/o.total*100) : 0;
+    return `<tr>
+      <td><div class="person-cell"><div class="avatar ${avatarColor(name)}">${escapeHtml(initials(name))}</div><strong>${escapeHtml(name)}</strong></div></td>
+      <td style="text-align:right">${o.total}</td>
+      <td style="text-align:right">${o.done>0?`<span class="pill pill-green">${o.done}</span>`:'—'}</td>
+      <td style="text-align:right">${o.active>0?`<span class="pill pill-amber">${o.active}</span>`:'—'}</td>
+      <td style="text-align:right">${o.blocked>0?`<span class="pill pill-red">${o.blocked}</span>`:'—'}</td>
+      <td style="text-align:right">${o.sp>0?`<span class="sp-badge">${o.sp}</span>`:'—'}</td>
+      <td><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${donePct}%"></div></div><span class="pct">${donePct}%</span></div></td>
+    </tr>`;
+  }).join('');
+
+  // Task list — active first, then todo, then done
+  const sorted = [...tasks].sort((a,b) => {
+    const rank = t => SPRINT_DONE_STATUSES.has(t.status) ? 2 : SPRINT_ACTIVE_STATUSES.has(t.status) ? 0 : 1;
+    return rank(a)-rank(b) || (SPRINT_PRIORITY_COLOR[b.priority]||'z').localeCompare(SPRINT_PRIORITY_COLOR[a.priority]||'z');
+  });
+  const taskRows = sorted.map(t => {
+    const owner = splitPeople(t.owner||'')[0];
+    const isDone = SPRINT_DONE_STATUSES.has(t.status);
+    const prColor = SPRINT_PRIORITY_COLOR[t.priority]||'#9ca3af';
+    const pushBadge = t.push && t.push !== 'Do Not Push'
+      ? `<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">↗ Push</span>` : '';
+    return `<tr style="${isDone?'opacity:0.55':''}">
+      <td><a class="item-link" href="${escapeHtml(t.url||'#')}" target="_blank" rel="noopener">${escapeHtml(t.iterItemName||t.name)}</a> ${pushBadge}</td>
+      <td><span style="font-size:10px;color:#6b7280;background:#f1f5f9;padding:1px 6px;border-radius:4px">${escapeHtml(t.type)}</span></td>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${prColor};margin-right:4px"></span>${t.priority||'—'}</td>
+      <td><span class="status-pill" style="background:${SPRINT_STATUS_COLOR[t.status]||'#9ca3af'};font-size:10px">${escapeHtml(t.status||'—')}</span></td>
+      <td>${owner?`<div class="person-cell"><div class="avatar ${avatarColor(owner)}" style="width:20px;height:20px;font-size:9px">${escapeHtml(initials(owner))}</div><span style="font-size:12px">${escapeHtml(owner)}</span></div>`:'—'}</td>
+      <td>${t.sp?`<span class="sp-badge">${t.sp}</span>`:'—'}</td>
+      <td>${t.due?fmtDate(t.due):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <!-- Sprint header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:20px;font-weight:800;color:#111827">${escapeHtml(title)}</h2>
+        <div style="font-size:12px;color:#6b7280;margin-top:3px">
+          ${start?start.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'?'} →
+          ${endDate?endDate.toLocaleDateString(undefined,{month:'short',day:'numeric'}):'?'}
+          &nbsp;·&nbsp; ${daysLeftHtml}
+        </div>
+      </div>
+      <select class="select" style="font-size:12px" onchange="loadSprintBoard(this.value)">
+        ${switcherOpts}
+      </select>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpi-row cols-6" style="margin-bottom:20px">
+      <div class="kpi accent-blue"><div class="label">Total Items</div><div class="value">${s.total}</div><div class="sub">in this sprint</div></div>
+      <div class="kpi accent-green"><div class="label">Done</div><div class="value">${s.done}</div><div class="sub">${s.pct}% complete</div></div>
+      <div class="kpi accent-amber"><div class="label">In Progress</div><div class="value">${s.active}</div><div class="sub">actively worked</div></div>
+      <div class="kpi accent-gray"><div class="label">To Do</div><div class="value">${s.todo}</div><div class="sub">not started</div></div>
+      <div class="kpi accent-red"><div class="label">Blocked</div><div class="value">${s.blocked}</div><div class="sub">stuck items</div></div>
+      <div class="kpi accent-purple"><div class="label">Story Points</div><div class="value">${s.doneSP}<span style="font-size:14px;font-weight:500;color:#9ca3af"> / ${s.totalSP}</span></div><div class="sub">SP completed</div></div>
+    </div>
+
+    <!-- Progress + charts -->
+    <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:16px;margin-bottom:20px;align-items:start">
+      <div class="card" style="text-align:center;padding:20px 24px">
+        <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Sprint Progress</div>
+        ${ring}
+        <div style="margin-top:8px;font-size:12px;color:#374151">${s.done} of ${s.total} done</div>
+        <div style="margin-top:10px">${statusPills}</div>
+      </div>
+      <div class="card"><h3>Workload by Owner</h3><div class="chart-wrap tall" id="sprint-owner-chart"></div></div>
+      <div class="card"><h3>Priority Mix</h3><div class="chart-wrap tall" id="sprint-priority-chart"></div></div>
+    </div>
+
+    <!-- Owner table -->
+    <div class="table-card" style="margin-bottom:20px">
+      <table><thead><tr><th>Team Member</th><th style="text-align:right">Total</th><th style="text-align:right">Done</th><th style="text-align:right">Active</th><th style="text-align:right">Blocked</th><th style="text-align:right">SP</th><th>Progress</th></tr></thead>
+      <tbody>${ownerRows}</tbody></table>
+    </div>
+
+    <!-- Full task list -->
+    <div class="card">
+      <h3>All Sprint Items <span style="color:#9ca3af;font-weight:400;font-size:13px">${s.pushed>0?`· <span style="color:#f59e0b">${s.pushed} marked for push</span>`:''}</span></h3>
+      <div class="table-card" style="margin-top:12px"><table>
+        <thead><tr><th>Item</th><th>Type</th><th>Priority</th><th>Status</th><th>Owner</th><th>SP</th><th>Due</th></tr></thead>
+        <tbody>${taskRows}</tbody>
+      </table></div>
+    </div>`;
+
+  // Owner chart
+  const ownerEntries = Object.entries(s.byOwner).sort((a,b)=>b[1].total-a[1].total).slice(0,12);
+  const oc = ec('sprint-owner-chart');
+  if(oc) oc.setOption({
+    animation:true,animationDuration:400,
+    grid:{left:90,right:16,top:8,bottom:8,containLabel:false},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+    legend:{show:false},
+    xAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f5f9'}},axisLabel:{color:'#6b7280',fontSize:10},min:0},
+    yAxis:{type:'category',data:ownerEntries.map(e=>e[0].split(' ')[0]),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#374151',fontSize:11},inverse:true},
+    series:[
+      {name:'Done',type:'bar',stack:'t',data:ownerEntries.map(e=>e[1].done),itemStyle:{color:'#10b981'},barMaxWidth:20},
+      {name:'Active',type:'bar',stack:'t',data:ownerEntries.map(e=>e[1].active),itemStyle:{color:'#f59e0b'},barMaxWidth:20},
+      {name:'To Do',type:'bar',stack:'t',data:ownerEntries.map(e=>e[1].todo),itemStyle:{color:'#93c5fd'},barMaxWidth:20},
+      {name:'Blocked',type:'bar',stack:'t',data:ownerEntries.map(e=>e[1].blocked),itemStyle:{color:'#ef4444'},barMaxWidth:20},
+    ],
+  });
+
+  // Priority donut
+  const prEntries = ['Critical','High','Medium','Low'].filter(p=>s.byPriority[p]).map(p=>[p,s.byPriority[p]]);
+  const pc = ec('sprint-priority-chart');
+  if(pc) pc.setOption({
+    animation:true,animationDuration:400,
+    tooltip:{trigger:'item',formatter:p=>`<b>${p.name}</b>: ${p.value}`},
+    legend:{bottom:0,type:'scroll',itemGap:8,textStyle:{fontSize:11}},
+    series:[{type:'pie',radius:['50%','72%'],center:['50%','44%'],padAngle:3,
+      itemStyle:{borderRadius:4,borderColor:'#fff',borderWidth:2},
+      label:{show:false},
+      data:prEntries.map(([p,n])=>({name:p,value:n,itemStyle:{color:SPRINT_PRIORITY_COLOR[p]||'#9ca3af'}})),
+    }],
+  });
 }
 
 let ACTIVE_MEMBER = null;
