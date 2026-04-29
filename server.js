@@ -23,7 +23,7 @@ const BOARDS = [
   { key: 'aim',    id: '18397691833', cols: ['color_mm01gkr3','color_mm01njm4','multiple_person_mm01ep1t','dropdown_mm07v0wc','date_mm01xcns','date_mm01ead4','rating_mm0194kz','color_mm01kq73','multiple_person_mm019deh','dropdown_mm01zc7c'] },
   { key: 'harley', id: '18409299249', cols: ['color_mm2jpa8m','color_mm2jcewg','date_mm2jhcpf','text_mm2jrg3h'] },
   { key: 'pt',     id: '18410501676', cols: ['text_mm2tpd59','color_mm2t5ymq','text_mm2th0rf','color_mm2tpgb5'] },
-  { key: 'iter',   id: '18391776041', cols: ['color_mkzy4ahq','color_mm01yqgw','date_mm018jsq'] },
+  { key: 'iter',   id: '18391776041', cols: ['color_mkzy4ahq','color_mm01yqgw','date_mm018jsq','board_relation_mkykqaks'] },
 ];
 
 const cache = { data: null, fetchedAt: null, refreshing: false };
@@ -42,20 +42,71 @@ async function mondayFetch(body) {
 
 async function fetchBoardItems(boardId, cols) {
   let items = [], cursor = null, pages = 0;
+  // Use inline fragment so board_relation columns return linked_item_ids
+  const cvFrag = `column_values(ids:$c){id text ... on BoardRelationValue{linked_item_ids}}`;
   while (true) {
     let data;
     if (!cursor) {
-      data = await mondayFetch({ query: `query($b:ID!,$l:Int!,$c:[String!]){boards(ids:[$b]){items_page(limit:$l){cursor items{id name url updated_at column_values(ids:$c){id text}}}}}`, variables: { b: boardId, l: 500, c: cols } });
+      data = await mondayFetch({ query: `query($b:ID!,$l:Int!,$c:[String!]){boards(ids:[$b]){items_page(limit:$l){cursor items{id name url updated_at ${cvFrag}}}}}`, variables: { b: boardId, l: 500, c: cols } });
       const page = data.boards[0].items_page;
       items.push(...page.items); cursor = page.cursor || null;
     } else {
-      data = await mondayFetch({ query: `query($l:Int!,$cur:String!,$c:[String!]){next_items_page(limit:$l,cursor:$cur){cursor items{id name url updated_at column_values(ids:$c){id text}}}}`, variables: { l: 500, cur: cursor, c: cols } });
+      data = await mondayFetch({ query: `query($l:Int!,$cur:String!,$c:[String!]){next_items_page(limit:$l,cursor:$cur){cursor items{id name url updated_at ${cvFrag}}}}`, variables: { l: 500, cur: cursor, c: cols } });
       const page = data.next_items_page;
       items.push(...page.items); cursor = page.cursor || null;
     }
     pages++; if (!cursor || pages > 20) break;
   }
   return items;
+}
+
+// Resolve IT owners for iteration items via linked board items
+async function enrichIterOwners(iterItems) {
+  // Collect all unique linked item IDs
+  const linkedIds = new Set();
+  for (const it of iterItems) {
+    for (const cv of (it.column_values || [])) {
+      if (cv.id === 'board_relation_mkykqaks') {
+        for (const lid of (cv.linked_item_ids || [])) linkedIds.add(lid);
+      }
+    }
+  }
+  if (!linkedIds.size) return;
+
+  // Batch fetch in chunks of 100
+  const ids = [...linkedIds];
+  const ownerMap = {}; // linked item id → owner name(s)
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    try {
+      const data = await mondayFetch({
+        query: `query($ids:[ID!]!){items(ids:$ids){id column_values(ids:["multiple_person_mkyrscj4","person"]){id text}}}`,
+        variables: { ids: chunk },
+      });
+      for (const item of (data.items || [])) {
+        const owners = [];
+        for (const cv of item.column_values) {
+          if (cv.text) owners.push(...cv.text.split(',').map(s => s.trim()).filter(Boolean));
+        }
+        if (owners.length) ownerMap[item.id] = [...new Set(owners)];
+      }
+    } catch (e) {
+      console.warn('[cache] Owner enrichment chunk failed:', e.message);
+    }
+  }
+
+  // Attach owners back to iteration items
+  for (const it of iterItems) {
+    const owners = new Set();
+    for (const cv of (it.column_values || [])) {
+      if (cv.id === 'board_relation_mkykqaks') {
+        for (const lid of (cv.linked_item_ids || [])) {
+          (ownerMap[lid] || []).forEach(o => owners.add(o));
+        }
+      }
+    }
+    it._owners = [...owners];
+  }
 }
 
 async function refreshCache() {
@@ -67,9 +118,15 @@ async function refreshCache() {
     const results = await Promise.all(BOARDS.map(b => fetchBoardItems(b.id, b.cols)));
     const data = {};
     BOARDS.forEach((b, i) => { data[b.key] = results[i]; });
+
+    // Enrich iteration items with IT owner from linked board
+    console.log('[cache] Enriching iteration owners…');
+    await enrichIterOwners(data.iter);
+
     cache.data = data;
     cache.fetchedAt = Date.now();
-    console.log(`[cache] Ready — ${Object.values(data).reduce((s,a)=>s+a.length,0)} total items in ${Date.now()-t}ms`);
+    const ownerCount = data.iter.filter(it => it._owners?.length).length;
+    console.log(`[cache] Ready — ${Object.values(data).reduce((s,a)=>s+a.length,0)} total items, ${ownerCount} iter items with owners, ${Date.now()-t}ms`);
   } catch (err) {
     console.error('[cache] Refresh failed:', err.message);
   } finally {

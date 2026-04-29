@@ -2013,8 +2013,11 @@ function iterMissionRow(it) {
   let pillClass = 'unknown', pillLabel = 'Active';
   if (push === 'Push') { pillClass = 'push'; pillLabel = 'Push Next'; }
   else if (push === 'Do Not Push') { pillClass = 'nopush'; pillLabel = 'Stable'; }
+  const owners = it._owners?.length ? it._owners.join(', ') : '';
+  const ownerBadge = owners ? `<span style="font-size:9px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px 6px;flex-shrink:0">${escapeHtml(owners)}</span>` : '';
   return `<div class="iter-mission-row">
     <div class="iter-mission-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>
+    ${ownerBadge}
     <span class="iter-push-pill ${pillClass}">${pillLabel}</span>
   </div>`;
 }
@@ -2030,23 +2033,29 @@ function iterRenderKpi(stats) {
 function iterRenderOverview(stats) {
   const el = document.getElementById('iter-tab-overview');
   if (!el) return;
-  // Group missions by implied owner (name at start of item)
+  // Group by _owners (resolved from linked IT Projects board)
   const byPerson = {};
   const unowned = [];
   for (const it of stats.items) {
-    const match = ITER_TEAM_NAMES.find(n => it.name.toLowerCase().startsWith(n.toLowerCase() + ' ') || it.name.toLowerCase().startsWith(n.toLowerCase() + '-'));
-    if (match) { (byPerson[match] = byPerson[match] || []).push(it); }
-    else unowned.push(it);
+    if (it._owners?.length) {
+      for (const owner of it._owners) {
+        (byPerson[owner] = byPerson[owner] || []).push(it);
+      }
+    } else unowned.push(it);
   }
-  let html = '<div class="section-title">Missions by Team Member</div>';
+  let html = '<div class="section-title">Missions by IT Owner</div>';
   const sorted = Object.entries(byPerson).sort((a,b) => b[1].length - a[1].length);
   for (const [person, missions] of sorted) {
-    html += `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${escapeHtml(person)} (${missions.length})</div>`;
+    html += `<div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+        <span class="member-avatar ${avatarColor(person)}" style="width:20px;height:20px;font-size:8px">${initials(person)}</span>
+        ${escapeHtml(person)} <span style="font-weight:400;color:#94a3b8">(${missions.length})</span>
+      </div>`;
     html += missions.map(iterMissionRow).join('');
     html += '</div>';
   }
   if (unowned.length) {
-    html += `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Shared / General (${unowned.length})</div>`;
+    html += `<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">No Owner Assigned (${unowned.length})</div>`;
     html += unowned.map(iterMissionRow).join('');
     html += '</div>';
   }
@@ -2161,12 +2170,9 @@ function openTeamView(name) {
   // PT — no assignee; match by name in item name
   const ptMatches = ptItems.filter(it => it.name.toLowerCase().includes(nameLower));
 
-  // Iterations — match by name prefix convention
+  // Iterations — match by resolved _owners field (from IT Projects board)
   const iterMatches = iterItems.filter(it =>
-    it.name.toLowerCase().startsWith(nameLower + ' ') ||
-    it.name.toLowerCase().startsWith(nameLower + '-') ||
-    it.name.toLowerCase().includes(' ' + nameLower + ' ') ||
-    it.name.toLowerCase().includes('- ' + nameLower + ' ')
+    it._owners?.some(o => o.toLowerCase().includes(nameLower) || nameLower.includes(o.toLowerCase().split(' ')[0].toLowerCase()))
   );
 
   const total = aimMatches.length + harleyMatches.length + ptMatches.length + iterMatches.length;
@@ -2206,7 +2212,8 @@ function openTeamView(name) {
     const cv = it.column_values || {};
     const push = cv[ITER_COL.push] || '';
     let pill = ''; if (push === 'Push') pill = '<span class="iter-push-pill push" style="font-size:9px">Push Next</span>'; else if (push === 'Do Not Push') pill = '<span class="iter-push-pill nopush" style="font-size:9px">Stable</span>';
-    html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${pill}</div>`;
+    const owners = it._owners?.length ? `<span style="font-size:9px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:1px 6px">${escapeHtml(it._owners.join(', '))}</span>` : '';
+    html += `<div class="team-task-row"><div class="team-task-name"><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.name)}</a></div>${owners}${pill}</div>`;
   });
   html += '</div>';
 
