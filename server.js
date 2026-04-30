@@ -323,9 +323,36 @@ const ITER_BOARD_ID = '18391776041';
 const SPRINT_PUSH_COL = 'color_mkzy4ahq';
 const SPRINT_RELATION_COL = 'board_relation_mkykqaks';
 
-// Column IDs per source board
-const PROJECTS_COLS = { status:'color_mky88tbm', priority:'color_mky8z31n', owner:'person', domain:'color_mkypswp0', type:'color_mkyz8h43', quarter:'color_mkywwmk6' };
-const TASKS_COLS    = { status:'color_mkyrdkxj', priority:'status', owner:'multiple_person_mkyrscj4', sp:'numeric_mkywnmps', due:'date4', category:'color_mkyrehkw' };
+// Column IDs per source board — all relevant fields including SP, timeline, team, actual SP
+const PROJECTS_COLS = {
+  status:   'color_mky88tbm',
+  priority: 'color_mky8z31n',
+  owner:    'person',
+  domain:   'color_mkypswp0',   // Team/domain
+  type:     'color_mkyz8h43',
+  quarter:  'color_mkywwmk6',
+  sp:       'numeric_mkywsmrr', // Milestone SP
+  timeline: 'timerange_mky87sdd',
+  complex:  'color_mky8cgs5',
+};
+const TASKS_COLS = {
+  status:   'color_mkyrdkxj',
+  priority: 'status',
+  owner:    'multiple_person_mkyrscj4',
+  sp:       'numeric_mkywnmps',       // Task SP (planned)
+  actualSp: 'numeric_mm2vv692',       // Actual SP
+  due:      'date4',
+  category: 'color_mkyrehkw',         // Type (On Going, etc.)
+  domain:   'color_mm2tdyyh',         // Category
+  team:     'color_mkywkfx5',
+};
+
+// Normalize status text — boards have mixed casing
+function normalizeStatus(s) {
+  if (!s) return s;
+  const map = { 'working on it': 'Working on it', 'done ✓': 'Done', 'do not start yet': 'Do Not Start Yet' };
+  return map[s.toLowerCase()] ?? s;
+}
 
 // Parse sprint date range from group title e.g. "Q2 Iteration3: 26.4 - 9.5"
 function parseSprintDates(title) {
@@ -342,90 +369,146 @@ function parseSprintDates(title) {
 }
 
 async function fetchSprintData(groupId, token) {
-  // 1. Fetch iteration items in this sprint group
-  const groupData = await mondayFetch({
-    query: `query($b:ID!,$g:[String!]){boards(ids:[$b]){groups(ids:$g){id title items_page(limit:200){items{id name column_values(ids:["${SPRINT_PUSH_COL}","${SPRINT_RELATION_COL}"]){id text ... on BoardRelationValue{linked_item_ids}}}}}}}`,
-    variables: { b: ITER_BOARD_ID, g: [groupId] },
-  }, token);
+  const t0 = Date.now();
+
+  // Step 1: Fetch iter group items + sprint group list in parallel
+  const [groupData, groupsData] = await Promise.all([
+    mondayFetch({
+      query: `query($b:ID!,$g:[String!]){boards(ids:[$b]){groups(ids:$g){id title items_page(limit:200){items{id name column_values(ids:["${SPRINT_PUSH_COL}","${SPRINT_RELATION_COL}"]){id text ... on BoardRelationValue{linked_item_ids}}}}}}}`,
+      variables: { b: ITER_BOARD_ID, g: [groupId] },
+    }, token),
+    mondayFetch({
+      query: `query($b:ID!){boards(ids:[$b]){groups{id title}}}`,
+      variables: { b: ITER_BOARD_ID },
+    }, token),
+  ]);
+
   const group = groupData.boards[0].groups[0];
+  if (!group) throw new Error(`Sprint group ${groupId} not found`);
   const iterItems = group.items_page.items;
 
-  // 2. Collect all unique linked item IDs
+  // Step 2: Collect all linked item IDs
   const linkedIds = [];
   const iterMap = {}; // linkedId → iter item
   for (const it of iterItems) {
     for (const cv of it.column_values) {
       if (cv.id === SPRINT_RELATION_COL) {
         for (const lid of (cv.linked_item_ids || [])) {
-          linkedIds.push(lid);
+          if (!iterMap[lid]) linkedIds.push(lid); // dedup
           iterMap[lid] = it;
         }
       }
     }
   }
 
-  // 3. Batch fetch linked items in chunks of 50
-  const linkedItems = [];
-  for (let i = 0; i < linkedIds.length; i += 50) {
-    const chunk = linkedIds.slice(i, i + 50);
-    try {
-      const data = await mondayFetch({
-        query: `query($ids:[ID!]!){items(ids:$ids){id name url board{id name}column_values{id text}}}`,
-        variables: { ids: chunk },
-      }, token);
-      linkedItems.push(...(data.items || []));
-    } catch(e) { console.warn('[sprint] chunk failed:', e.message); }
-  }
+  // Step 3: Batch fetch all linked items in parallel chunks of 100
+  const CHUNK = 100;
+  const chunks = [];
+  for (let i = 0; i < linkedIds.length; i += CHUNK) chunks.push(linkedIds.slice(i, i + CHUNK));
 
-  // 4. Normalize linked items into sprint tasks
+  const chunkResults = await Promise.all(chunks.map(chunk =>
+    mondayFetch({
+      query: `query($ids:[ID!]!){items(ids:$ids){id name url board{id name}column_values{id text}}}`,
+      variables: { ids: chunk },
+    }, token).catch(e => { console.warn('[sprint] chunk failed:', e.message); return { items: [] }; })
+  ));
+
+  const linkedItems = chunkResults.flatMap(r => r.items || []);
+
+  // Step 4: Normalize into sprint tasks
   const tasks = linkedItems.map(it => {
     const cv = Object.fromEntries(it.column_values.map(c => [c.id, c.text || null]));
     const iterItem = iterMap[it.id] || {};
     const pushCV = (iterItem.column_values || []).find(c => c.id === SPRINT_PUSH_COL);
     const isTaskBoard = it.board.name.toLowerCase().includes('task');
+
+    let status, priority, owner, sp, actualSp, due, domain, team, type, timeline;
+    if (isTaskBoard) {
+      status   = normalizeStatus(cv[TASKS_COLS.status]);
+      priority = cv[TASKS_COLS.priority];
+      owner    = cv[TASKS_COLS.owner];
+      sp       = parseFloat(cv[TASKS_COLS.sp]) || 0;
+      actualSp = parseFloat(cv[TASKS_COLS.actualSp]) || null;
+      due      = cv[TASKS_COLS.due];
+      domain   = cv[TASKS_COLS.domain] || cv[TASKS_COLS.category];
+      team     = cv[TASKS_COLS.team];
+      type     = cv[TASKS_COLS.category] || 'Task';
+    } else {
+      status   = normalizeStatus(cv[PROJECTS_COLS.status]);
+      priority = cv[PROJECTS_COLS.priority];
+      owner    = cv[PROJECTS_COLS.owner];
+      sp       = parseFloat(cv[PROJECTS_COLS.sp]) || 0;
+      actualSp = null;
+      due      = null; // timeline is a range — no single due date
+      timeline = cv[PROJECTS_COLS.timeline]; // e.g. "2026-03-01 - 2026-04-30"
+      domain   = cv[PROJECTS_COLS.domain];
+      team     = null;
+      type     = cv[PROJECTS_COLS.type] || 'Project';
+    }
+
     return {
       id: it.id,
       name: it.name,
       url: it.url,
       board: it.board.name,
+      boardId: it.board.id,
       isTaskBoard,
       iterItemName: iterItem.name || it.name,
       push: pushCV?.text || null,
-      // Unified fields — pick from whichever board type
-      status:   isTaskBoard ? cv[TASKS_COLS.status]   : cv[PROJECTS_COLS.status],
-      priority: isTaskBoard ? cv[TASKS_COLS.priority]  : cv[PROJECTS_COLS.priority],
-      owner:    isTaskBoard ? cv[TASKS_COLS.owner]     : cv[PROJECTS_COLS.owner],
-      sp:       isTaskBoard ? parseFloat(cv[TASKS_COLS.sp]) || 0 : 0,
-      due:      isTaskBoard ? cv[TASKS_COLS.due]       : null,
-      domain:   isTaskBoard ? cv[TASKS_COLS.category]  : cv[PROJECTS_COLS.domain],
-      type:     isTaskBoard ? 'Task' : (cv[PROJECTS_COLS.type] || 'Project'),
+      status, priority, owner, sp, actualSp, due, timeline, domain, team, type,
     };
   });
 
+  // Step 5: Build groups list for switcher (already fetched in step 1)
+  const allGroups = (groupsData.boards[0].groups || [])
+    .filter(g => !g.title.toLowerCase().includes('backlog'))
+    .map(g => ({ id: g.id, title: g.title, dates: parseSprintDates(g.title) }));
+
   const dates = parseSprintDates(group.title);
-  return { groupId: group.id, title: group.title, start: dates.start, end: dates.end, tasks };
+  console.log(`[sprint] ${groupId} → ${tasks.length} tasks, ${linkedItems.length} items fetched in ${Date.now()-t0}ms`);
+  return {
+    groupId: group.id,
+    title: group.title,
+    start: dates.start,
+    end: dates.end,
+    tasks,
+    allGroups, // include groups in response so frontend doesn't need a second call
+  };
 }
 
-// Cache sprint data per group
+// Cache sprint data per group+token — 10 min TTL, background refresh on stale
 const sprintCache = {};
+
+async function getOrFetchSprint(groupId, token) {
+  const cacheKey = `${token?.slice(-8)}_${groupId}`;
+  const cached = sprintCache[cacheKey];
+  const age = cached ? Date.now() - cached.fetchedAt : Infinity;
+  if (cached && age < 10 * 60 * 1000) return { ...cached.data, fromCache: true };
+  // Stale or missing — fetch fresh, and start background refresh if stale
+  if (cached && age < 20 * 60 * 1000) {
+    // Return stale immediately, refresh in background
+    fetchSprintData(groupId, token)
+      .then(data => { sprintCache[cacheKey] = { data, fetchedAt: Date.now() }; })
+      .catch(e => console.warn('[sprint] bg refresh failed:', e.message));
+    return { ...cached.data, fromCache: true, stale: true };
+  }
+  const data = await fetchSprintData(groupId, token);
+  sprintCache[cacheKey] = { data, fetchedAt: Date.now() };
+  return data;
+}
 
 app.get('/api/sprint', async (req, res) => {
   const groupId = req.query.group || 'group_mm2jgqs6';
   const token = getMondayToken(req);
-  const cacheKey = `${token?.slice(-8)}_${groupId}`;
   try {
-    if (sprintCache[cacheKey] && Date.now() - sprintCache[cacheKey].fetchedAt < 10 * 60 * 1000) {
-      return res.json({ ...sprintCache[cacheKey].data, fromCache: true });
-    }
-    const data = await fetchSprintData(groupId, token);
-    sprintCache[cacheKey] = { data, fetchedAt: Date.now() };
+    const data = await getOrFetchSprint(groupId, token);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Return all sprint groups (for sprint switcher)
+// Return all sprint groups (for sprint switcher — now also embedded in /api/sprint response)
 app.get('/api/sprints', async (req, res) => {
   const token = getMondayToken(req);
   try {
