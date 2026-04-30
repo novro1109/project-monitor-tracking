@@ -1154,6 +1154,10 @@ const NAV_CONFIG = {
     sections: [
       { label: 'Search', items: [] },
     ]
+  },
+  sprint: {
+    title: 'Sprint Dashboard',
+    sections: []
   }
 };
 
@@ -1178,8 +1182,8 @@ function switchBoard(board) {
   document.querySelectorAll('.board-view').forEach(v=>v.classList.toggle('active',v.id==='board-'+board));
   document.getElementById('topbar-title').textContent=NAV_CONFIG[board].title;
   renderNav(board);
-  // restore first tab (team board has no tabs)
-  if (board !== 'team') {
+  // restore first tab (team and sprint boards have no tabs)
+  if (board !== 'team' && board !== 'sprint') {
     // Reset member tracking subtitle if navigating away
     if (ACTIVE_MEMBER) {
       document.getElementById('member-tracking-sub').textContent = `${ALL_KNOWN_PEOPLE.length} members`;
