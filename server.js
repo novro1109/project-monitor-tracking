@@ -476,32 +476,45 @@ async function fetchSprintData(groupId, token) {
   };
 }
 
-// Cache sprint data per group+token — 10 min TTL, background refresh on stale
+// Sprint cache — shared across all users (sprint data is not user-specific)
+// Uses server token so all requests hit the same cache regardless of OAuth token
 const sprintCache = {};
+const SPRINT_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-async function getOrFetchSprint(groupId, token) {
-  const cacheKey = `${token?.slice(-8)}_${groupId}`;
-  const cached = sprintCache[cacheKey];
+async function getOrFetchSprint(groupId) {
+  const cached = sprintCache[groupId];
   const age = cached ? Date.now() - cached.fetchedAt : Infinity;
-  if (cached && age < 10 * 60 * 1000) return { ...cached.data, fromCache: true };
-  // Stale or missing — fetch fresh, and start background refresh if stale
-  if (cached && age < 20 * 60 * 1000) {
-    // Return stale immediately, refresh in background
-    fetchSprintData(groupId, token)
-      .then(data => { sprintCache[cacheKey] = { data, fetchedAt: Date.now() }; })
+  if (cached && age < SPRINT_CACHE_TTL) return { ...cached.data, fromCache: true };
+  // Stale (5–15 min): return immediately and refresh in background
+  if (cached && age < 15 * 60 * 1000) {
+    fetchSprintData(groupId, MONDAY_API_TOKEN_LOCAL)
+      .then(data => { sprintCache[groupId] = { data, fetchedAt: Date.now() }; })
       .catch(e => console.warn('[sprint] bg refresh failed:', e.message));
     return { ...cached.data, fromCache: true, stale: true };
   }
-  const data = await fetchSprintData(groupId, token);
-  sprintCache[cacheKey] = { data, fetchedAt: Date.now() };
+  // Cold — fetch fresh using server token
+  const data = await fetchSprintData(groupId, MONDAY_API_TOKEN_LOCAL);
+  sprintCache[groupId] = { data, fetchedAt: Date.now() };
   return data;
 }
 
+// Pre-warm current sprint on startup so first user gets instant response
+const CURRENT_SPRINT_GROUP = 'group_mm2jgqs6';
+if (MONDAY_API_TOKEN_LOCAL) {
+  setTimeout(() => {
+    fetchSprintData(CURRENT_SPRINT_GROUP, MONDAY_API_TOKEN_LOCAL)
+      .then(data => {
+        sprintCache[CURRENT_SPRINT_GROUP] = { data, fetchedAt: Date.now() };
+        console.log(`[sprint] Pre-warmed ${CURRENT_SPRINT_GROUP} — ${data.tasks.length} tasks`);
+      })
+      .catch(e => console.warn('[sprint] Pre-warm failed:', e.message));
+  }, 3000); // 3s after server start, after board cache starts warming
+}
+
 app.get('/api/sprint', async (req, res) => {
-  const groupId = req.query.group || 'group_mm2jgqs6';
-  const token = getMondayToken(req);
+  const groupId = req.query.group || CURRENT_SPRINT_GROUP;
   try {
-    const data = await getOrFetchSprint(groupId, token);
+    const data = await getOrFetchSprint(groupId);
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

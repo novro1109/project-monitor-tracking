@@ -2306,7 +2306,15 @@ async function loadSprintBoard(groupId) {
   body.innerHTML = '<div class="loading"><div class="spinner"></div>Loading sprint…</div>';
   try {
     const targetGroup = groupId || SPRINT_ALL_GROUPS[0]?.id || 'group_mm2jgqs6';
-    const res = await apiFetch(`/api/sprint?group=${targetGroup}`);
+    // 25-second timeout — server pre-warms cache so cold fetch should never hit user
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    let res;
+    try {
+      res = await apiFetch(`/api/sprint?group=${targetGroup}`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     SPRINT_DATA = await res.json();
     if (SPRINT_DATA.error) throw new Error(SPRINT_DATA.error);
     if (SPRINT_DATA.allGroups?.length) SPRINT_ALL_GROUPS = SPRINT_DATA.allGroups;
@@ -2314,7 +2322,15 @@ async function loadSprintBoard(groupId) {
     document.getElementById('sprint-sidebar-sub').textContent = SPRINT_DATA.title?.split(':')[0] || 'Sprint';
     renderSprintDashboard();
   } catch(e) {
-    body.innerHTML = `<div class="empty">Failed to load sprint: ${escapeHtml(e.message)}</div>`;
+    const isTimeout = e.name === 'AbortError';
+    body.innerHTML = `<div class="empty" style="text-align:center;padding:40px">
+      <div style="font-size:32px;margin-bottom:12px">${isTimeout ? '⏱' : '⚠️'}</div>
+      <div style="font-weight:600;margin-bottom:8px">${isTimeout ? 'Taking longer than expected…' : 'Failed to load sprint'}</div>
+      <div style="color:#6b7280;font-size:13px;margin-bottom:20px">${isTimeout ? 'The server is warming up sprint data. Try again in a moment.' : escapeHtml(e.message)}</div>
+      <button class="btn" onclick="SPRINT_LOADING=false;loadSprintBoard('${groupId||''}')">Retry</button>
+    </div>`;
+    SPRINT_LOADING = false;
+    return;
   } finally {
     SPRINT_LOADING = false;
   }
