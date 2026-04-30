@@ -4,13 +4,14 @@ const path = require('path');
 const fs = require('fs');
 
 // Load secrets from Monday Code secret manager into process.env at startup
+// Uses SecretsManager (reads from /secrets-v2/<SECRET_NAME>) for secrets set via `mapps code:secret`
+// Falls back to .env / process.env when running locally
 try {
-  const { EnvironmentVariablesManager } = require('@mondaycom/apps-sdk');
-  const envManager = new EnvironmentVariablesManager({ updateProcessEnv: true });
-  // Explicitly pull each secret into process.env in case updateProcessEnv missed them
-  const keys = ['MONDAY_API_TOKEN','ANTHROPIC_API_KEY','OPENAI_API_KEY','CLIENT_SECRET'];
+  const { SecretsManager } = require('@mondaycom/apps-sdk');
+  const secretsManager = new SecretsManager();
+  const keys = ['MONDAY_API_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CLIENT_SECRET'];
   keys.forEach(k => {
-    const val = envManager.get(k);
+    const val = secretsManager.get(k);
     if (val) { process.env[k] = val; console.log(`[secrets] Loaded ${k}`); }
   });
 } catch(e) {
